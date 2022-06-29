@@ -3,6 +3,7 @@ package fstln
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -111,7 +112,7 @@ func (util *TestUtil) ReadAllLines() (lines []string, err error) {
 	lines = []string{}
 
 	for err != io.EOF {
-		if line, err = util.ReadLine(); err != nil && err != io.EOF {
+		if _, line, err = util.ReadLine(); err != nil && err != io.EOF {
 			return nil, err
 		}
 
@@ -121,23 +122,57 @@ func (util *TestUtil) ReadAllLines() (lines []string, err error) {
 	return lines, nil
 }
 
-func (util *TestUtil) ReadLine() (line string, err error) {
+func (util *TestUtil) ReadAllCallback(
+	callback func(pos Position, line string, stg *storage) error,
+) (err error) {
 	var (
-		n        int
-		isPrefix = true
+		line string
+		pos  Position
+	)
+
+	for err != io.EOF {
+		if pos, line, err = util.ReadLine(); err != nil && err != io.EOF {
+			return err
+		}
+
+		if err := callback(pos, line, util.Stg); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (util *TestUtil) ReadLine() (pos Position, line string, err error) {
+	var (
 		buffer   = make([]byte, util.ReadBufferSize)
+		isPrefix = true
+		n        int
 	)
 
 	for isPrefix {
-		_, n, isPrefix, err = util.Stg.Read(buffer)
+		pos, n, isPrefix, err = util.Stg.Read(buffer)
 		if err != nil && err != io.EOF {
-			return "", err
+			return pos, "", err
 		}
 
 		line = fmt.Sprintf("%s%s", line, string(buffer[:n]))
 	}
 
-	return line, err
+	return pos, line, err
+}
+
+func (util *TestUtil) ReadOutput() string {
+	var (
+		data []byte
+		err  error
+	)
+
+	if data, err = ioutil.ReadFile(util.Name); err != nil {
+		util.Test.Fatal(err)
+	}
+
+	return string(data)
 }
 
 func (*TestUtil) Join(lines ...string) string {
@@ -145,10 +180,11 @@ func (*TestUtil) Join(lines ...string) string {
 }
 
 type mockHandle struct {
-	handle        stg.Handle
-	mockError     *mockError
-	readCallCount int
-	seekCallCount int
+	handle           stg.Handle
+	mockError        *mockError
+	readCallCount    int
+	seekCallCount    int
+	writeAtCallCount int
 }
 
 func (mock *mockHandle) Read(p []byte) (n int, err error) {
@@ -165,6 +201,14 @@ func (mock *mockHandle) Seek(offset int64, whence int) (int64, error) {
 	}
 	mock.seekCallCount++
 	return mock.handle.Seek(offset, whence)
+}
+
+func (mock *mockHandle) WriteAt(p []byte, off int64) (n int, err error) {
+	if mock.shouldError(mockErrorTypeWriteAt, mock.writeAtCallCount) {
+		return 0, fmt.Errorf(mock.mockError.msg)
+	}
+	mock.writeAtCallCount++
+	return mock.handle.WriteAt(p, off)
 }
 
 func (mock *mockHandle) shouldError(
@@ -194,4 +238,5 @@ type mockErrorType int
 const (
 	mockErrorTypeRead mockErrorType = iota + 1
 	mockErrorTypeSeek
+	mockErrorTypeWriteAt
 )

@@ -171,7 +171,8 @@ func TestRead(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			util, _, err := NewTestUtil().SetTest(t).
+			util, _, err := NewTestUtil().
+				SetTest(t).
 				SetName("test.jsonl").
 				SetLines(tc.lines...).
 				SetReadBufferSize(tc.readBufferSize).

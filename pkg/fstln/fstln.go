@@ -8,6 +8,7 @@ import (
 )
 
 type Storage interface {
+	Insert(line []byte) (position Position, err error)
 	Read(line []byte) (position Position, n int, isPrefix bool, err error)
 	ResetScan() (err error)
 }
@@ -17,17 +18,19 @@ type storage struct {
 	bufferCurr int
 	bufferEof  bool
 	bufferLen  int
-	emptyLines datastruc.Heap[Position]
+	emptyLines datastruc.SyncHeap[Position]
 	handle     stg.Handle
 	line       []byte
 	lineCurr   int
 	linePos    Position
 	linePrefix bool
+	offsetEnd  int64
 	readLock   sync.Mutex
 	readPhase  phase
 	scanCurr   int
 	scanEof    bool
 	scanEnd    int64
+	writeLock  sync.Mutex
 }
 
 func New(handle stg.Handle, options ...Option) (stg Storage, err error) {
@@ -36,8 +39,9 @@ func New(handle stg.Handle, options ...Option) (stg Storage, err error) {
 
 func new(handle stg.Handle, options ...Option) (stg *storage, err error) {
 	var (
-		bufferSize = 1000
-		lineSize   = 1000
+		bufferSize         = 1000
+		emptyLinesCapacity = 100
+		lineSize           = 1000
 	)
 
 	for _, option := range options {
@@ -49,6 +53,10 @@ func new(handle stg.Handle, options ...Option) (stg *storage, err error) {
 
 	stg = &storage{
 		buffer: make([]byte, bufferSize),
+		emptyLines: datastruc.NewSyncHeap(
+			PositionLesser,
+			datastruc.HeapOptionCapacity{Value: emptyLinesCapacity},
+		),
 		handle: handle,
 		line:   make([]byte, lineSize),
 	}
@@ -72,7 +80,7 @@ var PositionLesser = func(i, j Position) bool {
 		return false
 	}
 
-	return i.Offset > j.Offset
+	return i.Offset < j.Offset
 }
 
 type phase int

@@ -2,8 +2,6 @@ package fstln
 
 import (
 	"io"
-
-	datastruc "github.com/yo3jones/datastruc/pkg"
 )
 
 func (stg *storage) Read(
@@ -24,6 +22,11 @@ func (stg *storage) Read(
 }
 
 func (stg *storage) ResetScan() (err error) {
+	stg.readLock.Lock()
+	defer stg.readLock.Unlock()
+	stg.writeLock.Lock()
+	defer stg.writeLock.Unlock()
+
 	var endOffset int64
 
 	if endOffset, err = stg.handle.Seek(int64(0), io.SeekEnd); err != nil {
@@ -37,9 +40,10 @@ func (stg *storage) ResetScan() (err error) {
 	stg.bufferCurr = 0
 	stg.bufferEof = false
 	stg.bufferLen = 0
-	stg.emptyLines = datastruc.NewHeapSize(PositionLesser, 100)
+	stg.emptyLines.Clear()
 	stg.lineCurr = 0
 	stg.linePrefix = false
+	stg.offsetEnd = endOffset
 	stg.scanEof = false
 	stg.scanCurr = 0
 	stg.scanEnd = endOffset
@@ -156,7 +160,10 @@ func (stg *storage) handleEmptyLines() (err error) {
 		}
 
 		if groupedPos == nil {
-			groupedPos = &pos
+			groupedPos = &Position{
+				Offset: pos.Offset,
+				Len:    pos.Len,
+			}
 		} else {
 			groupedPos.Len += pos.Len
 		}
