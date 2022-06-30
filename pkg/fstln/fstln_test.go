@@ -54,3 +54,59 @@ func TestIsOption(t *testing.T) {
 		})
 	}
 }
+
+func TestPositionLesser(t *testing.T) {
+	type test struct {
+		name   string
+		i      Position
+		j      Position
+		expect bool
+	}
+
+	tests := []test{
+		{
+			name:   "with equal",
+			i:      Position{Offset: 1, Len: 1},
+			j:      Position{Offset: 1, Len: 1},
+			expect: false,
+		},
+		{
+			name:   "with len greater",
+			i:      Position{Offset: 1, Len: 2},
+			j:      Position{Offset: 1, Len: 1},
+			expect: true,
+		},
+		{
+			name:   "with len less",
+			i:      Position{Offset: 1, Len: 1},
+			j:      Position{Offset: 1, Len: 2},
+			expect: false,
+		},
+		{
+			name:   "with offset greater",
+			i:      Position{Offset: 2, Len: 1},
+			j:      Position{Offset: 1, Len: 1},
+			expect: false,
+		},
+		{
+			name:   "with offset less",
+			i:      Position{Offset: 1, Len: 1},
+			j:      Position{Offset: 2, Len: 1},
+			expect: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := PositionLesser(tc.i, tc.j)
+
+			if got != tc.expect {
+				t.Errorf(
+					"expected lesser to return %t but got %t",
+					tc.expect,
+					got,
+				)
+			}
+		})
+	}
+}

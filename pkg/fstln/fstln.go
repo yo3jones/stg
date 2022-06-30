@@ -8,9 +8,11 @@ import (
 )
 
 type Storage interface {
-	Insert(line []byte) (position Position, err error)
-	Read(line []byte) (position Position, n int, isPrefix bool, err error)
+	Delete(pos Position) (err error)
+	Insert(line []byte) (pos Position, err error)
+	Read(line []byte) (pos Position, n int, isPrefix bool, err error)
 	ResetScan() (err error)
+	Update(pos Position, line []byte) (afterPos Position, err error)
 }
 
 type storage struct {

@@ -1,6 +1,15 @@
 package fstln
 
-import "io"
+import (
+	"io"
+)
+
+func (stg *storage) Delete(pos Position) (err error) {
+	stg.writeLock.Lock()
+	defer stg.writeLock.Unlock()
+
+	return stg.delete(pos)
+}
 
 func (stg *storage) Insert(line []byte) (position Position, err error) {
 	stg.writeLock.Lock()
@@ -8,10 +17,90 @@ func (stg *storage) Insert(line []byte) (position Position, err error) {
 
 	context := newWriteLineContext(line)
 
+	return stg.insertUnsafe(context)
+}
+
+func (stg *storage) Update(
+	pos Position,
+	line []byte,
+) (afterPos Position, err error) {
+	stg.writeLock.Lock()
+	defer stg.writeLock.Unlock()
+
+	context := newWriteLineContext(line)
+
+	if context.effectiveLen <= pos.Len {
+		return stg.updateInplace(pos, context)
+	} else {
+		return stg.updateOutOfPlace(pos, context)
+	}
+}
+
+func (stg *storage) append(
+	context *writeLineContext,
+) (afterPos Position, err error) {
+	var n int
+
+	if n, err = context.writeAt(stg.handle, stg.offsetEnd); err != nil {
+		return afterPos, err
+	}
+
+	afterPos = Position{
+		Offset: int(stg.offsetEnd),
+		Len:    n,
+	}
+
+	stg.offsetEnd += int64(n)
+
+	return afterPos, nil
+}
+
+func (stg *storage) delete(pos Position) (err error) {
+	deleteBuffer := make([]byte, pos.Len)
+
+	for i := 0; i < pos.Len-1; i++ {
+		deleteBuffer[i] = ' '
+	}
+	deleteBuffer[pos.Len-1] = '\n'
+
+	_, err = stg.handle.WriteAt(deleteBuffer, int64(pos.Offset))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (stg *storage) insertOnBlank(
+	pos Position,
+	context *writeLineContext,
+) (afterPos Position, err error) {
+	var n int
+
+	if n, err = context.writeAt(stg.handle, int64(pos.Offset)); err != nil {
+		return afterPos, err
+	}
+
+	if pos.Len > n {
+		stg.emptyLines.Push(Position{
+			Offset: pos.Offset + n,
+			Len:    pos.Len - n,
+		})
+	}
+
+	afterPos = Position{
+		Offset: pos.Offset,
+		Len:    n,
+	}
+
+	return afterPos, nil
+}
+
+func (stg *storage) insertUnsafe(
+	context *writeLineContext,
+) (position Position, err error) {
 	var (
 		availablePosition Position
-		n                 int
-		off               int64
 		positionAvailable bool
 	)
 
@@ -22,30 +111,55 @@ func (stg *storage) Insert(line []byte) (position Position, err error) {
 	)
 
 	if positionAvailable {
-		off = int64(availablePosition.Offset)
+		return stg.insertOnBlank(availablePosition, context)
 	} else {
-		off = stg.offsetEnd
+		return stg.append(context)
+	}
+}
+
+func (stg *storage) updateInplace(
+	pos Position,
+	context *writeLineContext,
+) (afterPos Position, err error) {
+	var n int
+
+	if n, err = context.writeAt(stg.handle, int64(pos.Offset)); err != nil {
+		return afterPos, err
 	}
 
-	if n, err = context.writeAt(stg.handle, off); err != nil {
-		return position, err
-	}
-	position = Position{
-		Offset: int(off),
+	afterPos = Position{
+		Offset: pos.Offset,
 		Len:    n,
 	}
-	if !positionAvailable {
-		stg.offsetEnd += int64(n)
+
+	if afterPos.Len >= pos.Len {
+		return afterPos, nil
 	}
 
-	if positionAvailable && availablePosition.Len > n {
-		stg.emptyLines.Push(Position{
-			Offset: availablePosition.Offset + n,
-			Len:    availablePosition.Len - n,
-		})
+	err = stg.delete(Position{
+		Offset: pos.Offset + n,
+		Len:    pos.Len - n,
+	})
+	if err != nil {
+		return afterPos, err
 	}
 
-	return position, nil
+	return afterPos, nil
+}
+
+func (stg *storage) updateOutOfPlace(
+	pos Position,
+	context *writeLineContext,
+) (afterPos Position, err error) {
+	if afterPos, err = stg.insertUnsafe(context); err != nil {
+		return afterPos, err
+	}
+
+	if err = stg.delete(pos); err != nil {
+		return afterPos, err
+	}
+
+	return afterPos, nil
 }
 
 type writeLineContext struct {

@@ -183,11 +183,6 @@ func (stg *storage) peak() (b byte, peaked bool, err error) {
 		return b, false, nil
 	}
 
-	if stg.bufferCurr >= stg.bufferLen && stg.bufferEof {
-		// TODO coverage need to wait for write path
-		return b, false, nil
-	}
-
 	if stg.bufferCurr >= stg.bufferLen {
 		if err = stg.fillBuffer(); err != nil {
 			return b, false, err
