@@ -180,11 +180,12 @@ func (*TestUtil) Join(lines ...string) string {
 }
 
 type mockHandle struct {
-	handle           stg.Handle
-	mockError        *mockError
-	readCallCount    int
-	seekCallCount    int
-	writeAtCallCount int
+	handle            stg.Handle
+	mockError         *mockError
+	readCallCount     int
+	seekCallCount     int
+	truncateCallCount int
+	writeAtCallCount  int
 }
 
 func (mock *mockHandle) Read(p []byte) (n int, err error) {
@@ -201,6 +202,14 @@ func (mock *mockHandle) Seek(offset int64, whence int) (int64, error) {
 	}
 	mock.seekCallCount++
 	return mock.handle.Seek(offset, whence)
+}
+
+func (mock *mockHandle) Truncate(size int64) error {
+	if mock.shouldError(mockErrorTypeTruncate, mock.truncateCallCount) {
+		return fmt.Errorf(mock.mockError.msg)
+	}
+	mock.truncateCallCount++
+	return mock.handle.Truncate(size)
 }
 
 func (mock *mockHandle) WriteAt(p []byte, off int64) (n int, err error) {
@@ -239,4 +248,5 @@ const (
 	mockErrorTypeRead mockErrorType = iota + 1
 	mockErrorTypeSeek
 	mockErrorTypeWriteAt
+	mockErrorTypeTruncate
 )

@@ -10,6 +10,7 @@ import (
 type Storage interface {
 	Delete(pos Position) (err error)
 	Insert(line []byte) (pos Position, err error)
+	Maintenance() (freed int, err error)
 	Read(line []byte) (pos Position, n int, isPrefix bool, err error)
 	ResetScan() (err error)
 	Update(pos Position, line []byte) (afterPos Position, err error)

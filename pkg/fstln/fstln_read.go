@@ -27,28 +27,7 @@ func (stg *storage) ResetScan() (err error) {
 	stg.writeLock.Lock()
 	defer stg.writeLock.Unlock()
 
-	var endOffset int64
-
-	if endOffset, err = stg.handle.Seek(int64(0), io.SeekEnd); err != nil {
-		return err
-	}
-
-	if _, err = stg.handle.Seek(int64(0), io.SeekStart); err != nil {
-		return err
-	}
-
-	stg.bufferCurr = 0
-	stg.bufferEof = false
-	stg.bufferLen = 0
-	stg.emptyLines.Clear()
-	stg.lineCurr = 0
-	stg.linePrefix = false
-	stg.offsetEnd = endOffset
-	stg.scanEof = false
-	stg.scanCurr = 0
-	stg.scanEnd = endOffset
-
-	return nil
+	return stg.resetScanUnsafe()
 }
 
 func (stg *storage) fillBuffer() (err error) {
@@ -139,41 +118,19 @@ func (stg *storage) fillLine() (pos Position, err error) {
 
 func (stg *storage) handleEmptyLines() (err error) {
 	var (
-		b          byte
-		groupedPos *Position
-		peaked     bool
-		pos        Position
+		pos            Position
+		readEmptyLines bool
 	)
-	for {
-		if b, peaked, err = stg.peak(); err != nil {
-			return err
-		} else if !peaked {
-			break
-		}
 
-		if b != ' ' {
-			break
-		}
-
-		if pos, err = stg.fillLine(); err != nil {
-			return err
-		}
-
-		if groupedPos == nil {
-			groupedPos = &Position{
-				Offset: pos.Offset,
-				Len:    pos.Len,
-			}
-		} else {
-			groupedPos.Len += pos.Len
-		}
+	if pos, readEmptyLines, err = stg.readEmptyLines(); err != nil {
+		return err
 	}
 
-	if groupedPos == nil {
+	if !readEmptyLines {
 		return nil
 	}
 
-	stg.emptyLines.Push(*groupedPos)
+	stg.emptyLines.Push(pos)
 
 	return nil
 }
@@ -192,6 +149,48 @@ func (stg *storage) peak() (b byte, peaked bool, err error) {
 	return stg.buffer[stg.bufferCurr], true, nil
 }
 
+func (stg *storage) readEmptyLines() (
+	pos Position,
+	readEmptyLines bool,
+	err error,
+) {
+	var (
+		b          byte
+		groupedPos *Position
+		peaked     bool
+	)
+	for {
+		if b, peaked, err = stg.peak(); err != nil {
+			return pos, false, err
+		} else if !peaked {
+			break
+		}
+
+		if b != ' ' {
+			break
+		}
+
+		if pos, err = stg.fillLine(); err != nil {
+			return pos, false, err
+		}
+
+		if groupedPos == nil {
+			groupedPos = &Position{
+				Offset: pos.Offset,
+				Len:    pos.Len,
+			}
+		} else {
+			groupedPos.Len += pos.Len
+		}
+	}
+
+	if groupedPos == nil {
+		return pos, false, nil
+	}
+
+	return *groupedPos, true, nil
+}
+
 func (stg *storage) readLine() (err error) {
 	stg.readPhase = phaseEmpty
 	if err = stg.handleEmptyLines(); err != nil {
@@ -207,6 +206,31 @@ func (stg *storage) readLine() (err error) {
 	if err = stg.handleEmptyLines(); err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func (stg *storage) resetScanUnsafe() (err error) {
+	var endOffset int64
+
+	if endOffset, err = stg.handle.Seek(int64(0), io.SeekEnd); err != nil {
+		return err
+	}
+
+	if _, err = stg.handle.Seek(int64(0), io.SeekStart); err != nil {
+		return err
+	}
+
+	stg.bufferCurr = 0
+	stg.bufferEof = false
+	stg.bufferLen = 0
+	stg.emptyLines.Clear()
+	stg.lineCurr = 0
+	stg.linePrefix = false
+	stg.offsetEnd = endOffset
+	stg.scanEof = false
+	stg.scanCurr = 0
+	stg.scanEnd = endOffset
 
 	return nil
 }
