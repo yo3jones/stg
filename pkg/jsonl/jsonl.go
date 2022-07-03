@@ -32,6 +32,13 @@ func (mutation *JsonlMutation[I]) Add(field string, from, to any) {
 		mutation.From[field] = from
 	}
 	mutation.To[field] = to
+
+	// TODO check if the from and to values are equal, if so then remove
+	// this may be tough for non comparable types, might be able to do specific
+	// logic for set, slice and map?
+	//
+	// also need to worry about type safety as we don't have compile time
+	// checking that the from and to types match
 }
 
 func (mutation *JsonlMutation[I]) GetFrom() map[string]any {

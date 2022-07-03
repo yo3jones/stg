@@ -5,7 +5,7 @@ import (
 	"golang.org/x/exp/constraints"
 )
 
-type Storage[T comparable, I comparable, S Spec[I]] interface {
+type Storage[T comparable, I comparable, S stg.Spec[I]] interface {
 	Delete(filters Matcher[I, S]) (deleted int, err error)
 	Insert(mutators Mutator[T, I, S]) (inserted S, err error)
 	Select(
@@ -19,25 +19,17 @@ type Storage[T comparable, I comparable, S Spec[I]] interface {
 	) (updated []S, err error)
 }
 
-type Spec[I comparable] interface {
-	Ider[I]
-}
-
-type Ider[I comparable] interface {
-	GetId() I
-}
-
-type Accessor[I comparable, S Spec[I], T any] interface {
+type Accessor[I comparable, S stg.Spec[I], T any] interface {
 	Get(s S) T
 	Name() string
 	Set(s S, v T)
 }
 
-type Mutator[T comparable, I comparable, S Spec[I]] interface {
+type Mutator[T comparable, I comparable, S stg.Spec[I]] interface {
 	Mutate(s S, mutation stg.Mutation[T, I])
 }
 
-type mutator[T comparable, I comparable, S Spec[I], V comparable] struct {
+type mutator[T comparable, I comparable, S stg.Spec[I], V comparable] struct {
 	accessor Accessor[I, S, V]
 	value    V
 }
@@ -48,18 +40,18 @@ func (mutator *mutator[T, I, S, V]) Mutate(s S, mutation stg.Mutation[T, I]) {
 	mutation.Add(mutator.accessor.Name(), from, mutator.value)
 }
 
-func NewMutator[T comparable, I comparable, S Spec[I], V comparable](
+func NewMutator[T comparable, I comparable, S stg.Spec[I], V comparable](
 	accessor Accessor[I, S, V],
 	value V,
 ) Mutator[T, I, S] {
 	return &mutator[T, I, S, V]{accessor, value}
 }
 
-type Matcher[I comparable, S Spec[I]] interface {
+type Matcher[I comparable, S stg.Spec[I]] interface {
 	Match(s S) bool
 }
 
-type and[I comparable, S Spec[I]] struct {
+type and[I comparable, S stg.Spec[I]] struct {
 	matchers []Matcher[I, S]
 }
 
@@ -72,11 +64,11 @@ func (matcher *and[I, S]) Match(s S) bool {
 	return true
 }
 
-func And[I comparable, S Spec[I]](matchers ...Matcher[I, S]) Matcher[I, S] {
+func And[I comparable, S stg.Spec[I]](matchers ...Matcher[I, S]) Matcher[I, S] {
 	return &and[I, S]{matchers}
 }
 
-type or[I comparable, S Spec[I]] struct {
+type or[I comparable, S stg.Spec[I]] struct {
 	matchers []Matcher[I, S]
 }
 
@@ -89,11 +81,11 @@ func (matcher *or[I, S]) Match(s S) bool {
 	return false
 }
 
-func Or[I comparable, S Spec[I]](matchers ...Matcher[I, S]) Matcher[I, S] {
+func Or[I comparable, S stg.Spec[I]](matchers ...Matcher[I, S]) Matcher[I, S] {
 	return &or[I, S]{matchers}
 }
 
-type equals[I comparable, S Spec[I], T comparable] struct {
+type equals[I comparable, S stg.Spec[I], T comparable] struct {
 	accessor Accessor[I, S, T]
 	value    T
 }
@@ -102,18 +94,18 @@ func (matcher *equals[I, S, T]) Match(s S) bool {
 	return matcher.accessor.Get(s) == matcher.value
 }
 
-func Equals[I comparable, S Spec[I], T comparable](
+func Equals[I comparable, S stg.Spec[I], T comparable](
 	accessor Accessor[I, S, T],
 	value T,
 ) Matcher[I, S] {
 	return &equals[I, S, T]{accessor, value}
 }
 
-type Lesser[I comparable, S Spec[I]] interface {
+type Lesser[I comparable, S stg.Spec[I]] interface {
 	Less(i, j S) int
 }
 
-type orderBy[I comparable, S Spec[I], T constraints.Ordered] struct {
+type orderBy[I comparable, S stg.Spec[I], T constraints.Ordered] struct {
 	accessor Accessor[I, S, T]
 	desc     bool
 }
@@ -139,13 +131,13 @@ func (lesser *orderBy[I, S, T]) Less(i, j S) int {
 	return result
 }
 
-func OrderBy[I comparable, S Spec[I], T constraints.Ordered](
+func OrderBy[I comparable, S stg.Spec[I], T constraints.Ordered](
 	accessor Accessor[I, S, T],
 ) Lesser[I, S] {
 	return &orderBy[I, S, T]{accessor, false}
 }
 
-func OrderByDesc[I comparable, S Spec[I], T constraints.Ordered](
+func OrderByDesc[I comparable, S stg.Spec[I], T constraints.Ordered](
 	accessor Accessor[I, S, T],
 ) Lesser[I, S] {
 	return &orderBy[I, S, T]{accessor, true}
