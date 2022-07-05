@@ -8,7 +8,7 @@ import (
 	"github.com/yo3jones/stg/pkg/stg"
 )
 
-type specMsg[I comparable, S stg.Spec[I]] struct {
+type specMsg[S any] struct {
 	op     op
 	pos    fstln.Position
 	source string
@@ -25,18 +25,18 @@ const (
 	opDone
 )
 
-type readController[I comparable, S stg.Spec[I]] struct {
+type readController[S any] struct {
 	bufferLen    int
-	ch           chan specMsg[I, S]
+	ch           chan specMsg[S]
 	concurrency  int
 	errCh        chan error
-	factory      SpecFactory[I, S]
-	filters      Matcher[I, S]
+	factory      SpecFactory[S]
+	filters      Matcher[S]
 	lock         sync.Mutex
 	op           op
 	source       string
 	stg          fstln.Storage
-	unmarshaller stg.Unmarshaller[I, S]
+	unmarshaller stg.Unmarshaller[S]
 }
 
 type readControllerOpt interface {
@@ -75,16 +75,16 @@ func (opt optSource) isReadControllerOpt() bool {
 	return true
 }
 
-func newReadController[I comparable, S stg.Spec[I]](
-	ch chan specMsg[I, S],
+func newReadController[S any](
+	ch chan specMsg[S],
 	errCh chan error,
-	factory SpecFactory[I, S],
-	filters Matcher[I, S],
+	factory SpecFactory[S],
+	filters Matcher[S],
 	stg fstln.Storage,
-	unmarshaller stg.Unmarshaller[I, S],
+	unmarshaller stg.Unmarshaller[S],
 	opts ...readControllerOpt,
-) *readController[I, S] {
-	controller := &readController[I, S]{
+) *readController[S] {
+	controller := &readController[S]{
 		bufferLen:    1000,
 		ch:           ch,
 		concurrency:  10,
@@ -116,7 +116,7 @@ func newReadController[I comparable, S stg.Spec[I]](
 	return controller
 }
 
-func (controller *readController[I, S]) Start() {
+func (controller *readController[S]) Start() {
 	var (
 		err       error
 		waitGroup sync.WaitGroup
@@ -128,7 +128,7 @@ func (controller *readController[I, S]) Start() {
 	}
 
 	for i := 0; i < controller.concurrency; i++ {
-		proc := &readProcess[I, S]{
+		proc := &readProcess[S]{
 			buffer:     make([]byte, controller.bufferLen),
 			controller: controller,
 		}
@@ -142,19 +142,22 @@ func (controller *readController[I, S]) Start() {
 
 	waitGroup.Wait()
 
-	controller.ch <- specMsg[I, S]{op: opDone}
+	controller.ch <- specMsg[S]{
+		op:     opDone,
+		source: controller.source,
+	}
 }
 
-type readProcess[I comparable, S stg.Spec[I]] struct {
+type readProcess[S any] struct {
 	buffer     []byte
-	controller *readController[I, S]
+	controller *readController[S]
 }
 
-func (proc *readProcess[I, S]) Start() {
+func (proc *readProcess[S]) Start() {
 	var (
 		err error
 		pos fstln.Position
-		msg specMsg[I, S]
+		msg specMsg[S]
 	)
 
 	for {
@@ -178,9 +181,9 @@ func (proc *readProcess[I, S]) Start() {
 	}
 }
 
-func (proc *readProcess[I, S]) unmarshal(
+func (proc *readProcess[S]) unmarshal(
 	pos fstln.Position,
-) (msg specMsg[I, S], err error) {
+) (msg specMsg[S], err error) {
 	data := proc.buffer[:pos.Len]
 	s := proc.controller.factory.New()
 
@@ -189,7 +192,7 @@ func (proc *readProcess[I, S]) unmarshal(
 		return msg, err
 	}
 
-	return specMsg[I, S]{
+	return specMsg[S]{
 		op:     proc.controller.op,
 		pos:    pos,
 		source: proc.controller.source,
@@ -197,7 +200,7 @@ func (proc *readProcess[I, S]) unmarshal(
 	}, nil
 }
 
-func (proc *readProcess[I, S]) read() (pos fstln.Position, err error) {
+func (proc *readProcess[S]) read() (pos fstln.Position, err error) {
 	proc.controller.lock.Lock()
 	defer proc.controller.lock.Unlock()
 

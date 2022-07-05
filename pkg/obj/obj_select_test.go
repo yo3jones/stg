@@ -8,8 +8,8 @@ func TestSelect(t *testing.T) {
 	type test struct {
 		name        string
 		lines       []string
-		filters     Matcher[int, *TestSpec]
-		orderBys    []Lesser[int, *TestSpec]
+		filters     Matcher[*TestSpec]
+		orderBys    []Lesser[*TestSpec]
 		bufferLen   int
 		mockError   *mockErr
 		expectError string
@@ -23,8 +23,8 @@ func TestSelect(t *testing.T) {
 				`{"id":1,"foo":"foo","bar":"bar"}`,
 				`{"id":2,"foo":"fiz","bar":"buz"}`,
 			},
-			filters: Noop[int, *TestSpec](),
-			orderBys: []Lesser[int, *TestSpec]{
+			filters: Noop[*TestSpec](),
+			orderBys: []Lesser[*TestSpec]{
 				OrderByFoo,
 			},
 			expect: []*TestSpec{
@@ -41,7 +41,7 @@ func TestSelect(t *testing.T) {
 				`{"id":4,"foo":"fiz","bar":"buz"}`,
 			},
 			filters: BarEquals("bar"),
-			orderBys: []Lesser[int, *TestSpec]{
+			orderBys: []Lesser[*TestSpec]{
 				OrderByFoo,
 			},
 			expect: []*TestSpec{
@@ -55,8 +55,8 @@ func TestSelect(t *testing.T) {
 				`{"id":1,"foo":"foo","bar":"bar"}`,
 				`{"id":2,"foo":"fiz","bar":"buz"}`,
 			},
-			filters: Noop[int, *TestSpec](),
-			orderBys: []Lesser[int, *TestSpec]{
+			filters: Noop[*TestSpec](),
+			orderBys: []Lesser[*TestSpec]{
 				OrderByFoo,
 			},
 			bufferLen: 2,
@@ -71,8 +71,8 @@ func TestSelect(t *testing.T) {
 				`{"id":1,"foo":"foo","bar":"bar"}`,
 				`{"id":2,"foo":"fiz","bar":"buz"}`,
 			},
-			filters: Noop[int, *TestSpec](),
-			orderBys: []Lesser[int, *TestSpec]{
+			filters: Noop[*TestSpec](),
+			orderBys: []Lesser[*TestSpec]{
 				OrderByFoo,
 			},
 			mockError: &mockErr{
@@ -88,8 +88,8 @@ func TestSelect(t *testing.T) {
 				`{"id":1,"foo":"foo","bar":"bar"}`,
 				`{"id":2,"foo":"fiz","bar":"buz"}`,
 			},
-			filters: Noop[int, *TestSpec](),
-			orderBys: []Lesser[int, *TestSpec]{
+			filters: Noop[*TestSpec](),
+			orderBys: []Lesser[*TestSpec]{
 				OrderByFoo,
 			},
 			mockError: &mockErr{
@@ -105,8 +105,8 @@ func TestSelect(t *testing.T) {
 				`{"id":1,"foo":"foo",bar":"bar"}`,
 				`{"id":2,"foo":"fiz","bar":"buz"}`,
 			},
-			filters: Noop[int, *TestSpec](),
-			orderBys: []Lesser[int, *TestSpec]{
+			filters: Noop[*TestSpec](),
+			orderBys: []Lesser[*TestSpec]{
 				OrderByFoo,
 			},
 			expectError: "invalid character 'b' looking for beginning of object key string",

@@ -17,7 +17,7 @@ func (spec *TestSpec) GetId() int {
 }
 
 func TestMarshal(t *testing.T) {
-	jsonlMarshalUnmarshaller := &JsonlMarshalUnmarshaller[int, *TestSpec]{}
+	jsonlMarshalUnmarshaller := &JsonlMarshalUnmarshaller[*TestSpec]{}
 	spec := &TestSpec{1, "foo", "bar"}
 
 	got, err := jsonlMarshalUnmarshaller.Marshal(spec)
@@ -38,7 +38,7 @@ func TestMarshal(t *testing.T) {
 }
 
 func TestUnmarshal(t *testing.T) {
-	jsonlMarshalUnmarshaller := &JsonlMarshalUnmarshaller[int, *TestSpec]{}
+	jsonlMarshalUnmarshaller := &JsonlMarshalUnmarshaller[*TestSpec]{}
 	data := []byte(`{"id":1,"foo":"foo","bar":"bar"}`)
 	got := &TestSpec{}
 
@@ -55,7 +55,7 @@ func TestUnmarshal(t *testing.T) {
 }
 
 func TestMutator(t *testing.T) {
-	mutator := &JsonlMutation[int]{
+	mutator := &JsonlMutation{
 		TransactionId: "foo",
 		Timestamp:     time.Now(),
 		Type:          "bar",
@@ -112,7 +112,7 @@ func TestMutator(t *testing.T) {
 }
 
 func TestMutatorAdd(t *testing.T) {
-	mutator := &JsonlMutation[int]{
+	mutator := &JsonlMutation{
 		From: map[string]any{},
 		To:   map[string]any{},
 	}

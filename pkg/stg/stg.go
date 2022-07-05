@@ -12,31 +12,23 @@ type Handle interface {
 	Truncate(size int64) error
 }
 
-type Spec[I comparable] interface {
-	Ider[I]
+type MarshalUnmarshaller[S any] interface {
+	Marshaller[S]
+	Unmarshaller[S]
 }
 
-type Ider[I comparable] interface {
-	GetId() I
-}
-
-type MarshalUnmarshaller[I comparable, S Spec[I]] interface {
-	Marshaller[I, S]
-	Unmarshaller[I, S]
-}
-
-type Marshaller[I comparable, S Spec[I]] interface {
+type Marshaller[S any] interface {
 	Marshal(v S) ([]byte, error)
 }
 
-type Unmarshaller[I comparable, S Spec[I]] interface {
+type Unmarshaller[S any] interface {
 	Unmarshal(data []byte, v S) error
 }
 
-type Mutation[T comparable, I comparable] interface {
+type Mutation[T comparable] interface {
 	Add(field string, from, to any)
 	GetFrom() map[string]any
-	GetId() I
+	GetId() any
 	GetPartition() string
 	GetTimestamp() time.Time
 	GetTo() map[string]any

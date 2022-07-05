@@ -3,31 +3,29 @@ package jsonl
 import (
 	"encoding/json"
 	"time"
-
-	"github.com/yo3jones/stg/pkg/stg"
 )
 
-type JsonlMarshalUnmarshaller[I comparable, S stg.Spec[I]] struct{}
+type JsonlMarshalUnmarshaller[S any] struct{}
 
-func (*JsonlMarshalUnmarshaller[I, S]) Marshal(v S) ([]byte, error) {
+func (*JsonlMarshalUnmarshaller[S]) Marshal(v S) ([]byte, error) {
 	return json.Marshal(v)
 }
 
-func (*JsonlMarshalUnmarshaller[I, S]) Unmarshal(data []byte, v S) error {
+func (*JsonlMarshalUnmarshaller[S]) Unmarshal(data []byte, v S) error {
 	return json.Unmarshal(data, v)
 }
 
-type JsonlMutation[I comparable] struct {
+type JsonlMutation struct {
 	TransactionId string         `json:"transactionId"`
 	Timestamp     time.Time      `json:"timestamp"`
 	Type          string         `json:"type"`
-	Id            I              `json:"id"`
+	Id            any            `json:"id"`
 	Partition     string         `json:"partition"`
 	From          map[string]any `json:"from"`
 	To            map[string]any `json:"to"`
 }
 
-func (mutation *JsonlMutation[I]) Add(field string, from, to any) {
+func (mutation *JsonlMutation) Add(field string, from, to any) {
 	if _, exists := mutation.From[field]; !exists {
 		mutation.From[field] = from
 	}
@@ -41,30 +39,30 @@ func (mutation *JsonlMutation[I]) Add(field string, from, to any) {
 	// checking that the from and to types match
 }
 
-func (mutation *JsonlMutation[I]) GetFrom() map[string]any {
+func (mutation *JsonlMutation) GetFrom() map[string]any {
 	return mutation.From
 }
 
-func (mutation *JsonlMutation[I]) GetId() I {
+func (mutation *JsonlMutation) GetId() any {
 	return mutation.Id
 }
 
-func (mutation *JsonlMutation[I]) GetPartition() string {
+func (mutation *JsonlMutation) GetPartition() string {
 	return mutation.Partition
 }
 
-func (mutation *JsonlMutation[I]) GetTimestamp() time.Time {
+func (mutation *JsonlMutation) GetTimestamp() time.Time {
 	return mutation.Timestamp
 }
 
-func (mutation *JsonlMutation[I]) GetTo() map[string]any {
+func (mutation *JsonlMutation) GetTo() map[string]any {
 	return mutation.To
 }
 
-func (mutation *JsonlMutation[I]) GetTransactionId() string {
+func (mutation *JsonlMutation) GetTransactionId() string {
 	return mutation.TransactionId
 }
 
-func (mutation *JsonlMutation[I]) GetType() string {
+func (mutation *JsonlMutation) GetType() string {
 	return mutation.Type
 }

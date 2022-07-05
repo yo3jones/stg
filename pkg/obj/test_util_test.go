@@ -47,10 +47,10 @@ var (
 )
 
 var (
-	OrderByFoo     = OrderBy[int, *TestSpec, string](FooAccessor)
-	OrderByFooDesc = OrderByDesc[int, *TestSpec, string](FooAccessor)
-	OrderByBar     = OrderBy[int, *TestSpec, string](BarAccessor)
-	OrderByBarDesc = OrderByDesc[int, *TestSpec, string](BarAccessor)
+	OrderByFoo     = OrderBy[*TestSpec, string](FooAccessor)
+	OrderByFooDesc = OrderByDesc[*TestSpec, string](FooAccessor)
+	OrderByBar     = OrderBy[*TestSpec, string](BarAccessor)
+	OrderByBarDesc = OrderByDesc[*TestSpec, string](BarAccessor)
 )
 
 type fooAccessor struct{}
@@ -67,12 +67,12 @@ func (*fooAccessor) Set(s *TestSpec, v string) {
 	s.Foo = v
 }
 
-func FooEquals(v string) Matcher[int, *TestSpec] {
-	return Equals[int, *TestSpec, string](FooAccessor, v)
+func FooEquals(v string) Matcher[*TestSpec] {
+	return Equals[*TestSpec, string](FooAccessor, v)
 }
 
-func MutateFoo(v string) Mutator[string, int, *TestSpec] {
-	return NewMutator[string, int, *TestSpec, string](FooAccessor, v)
+func MutateFoo(v string) Mutator[string, *TestSpec] {
+	return NewMutator[string, *TestSpec, string](FooAccessor, v)
 }
 
 type barAccessor struct{}
@@ -89,18 +89,18 @@ func (*barAccessor) Set(s *TestSpec, v string) {
 	s.Bar = v
 }
 
-func BarEquals(v string) Matcher[int, *TestSpec] {
-	return Equals[int, *TestSpec, string](BarAccessor, v)
+func BarEquals(v string) Matcher[*TestSpec] {
+	return Equals[*TestSpec, string](BarAccessor, v)
 }
 
 type testUtil struct {
 	file        *os.File
 	fstlnstg    fstln.Storage
-	stg         *storage[string, int, *TestSpec]
+	stg         *storage[string, *TestSpec]
 	test        *testing.T
 	lines       []string
-	filters     Matcher[int, *TestSpec]
-	orderBys    []Lesser[int, *TestSpec]
+	filters     Matcher[*TestSpec]
+	orderBys    []Lesser[*TestSpec]
 	bufferLen   int
 	mockError   *mockErr
 	expectError string
@@ -128,10 +128,10 @@ func (util *testUtil) setup() (err error) {
 		bufferLen = util.bufferLen
 	}
 
-	util.stg = &storage[string, int, *TestSpec]{
+	util.stg = &storage[string, *TestSpec]{
 		stg:          util.fstlnstg,
 		factory:      &TestSpecFactory{},
-		unmarshaller: &jsonl.JsonlMarshalUnmarshaller[int, *TestSpec]{},
+		unmarshaller: &jsonl.JsonlMarshalUnmarshaller[*TestSpec]{},
 		concurrency:  2,
 		bufferLen:    bufferLen,
 	}

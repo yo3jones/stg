@@ -1,11 +1,11 @@
 package obj
 
-func (stg *storage[T, I, S]) Select(
-	filters Matcher[I, S],
-	orderBys ...Lesser[I, S],
+func (stg *storage[T, S]) Select(
+	filters Matcher[S],
+	orderBys ...Lesser[S],
 ) (results []S, err error) {
 	var (
-		ch    = make(chan specMsg[I, S], stg.concurrency)
+		ch    = make(chan specMsg[S], stg.concurrency)
 		errCh = make(chan error, stg.concurrency)
 	)
 
@@ -29,10 +29,10 @@ func (stg *storage[T, I, S]) Select(
 	return results, nil
 }
 
-func (stg *storage[T, I, S]) gatherResults(
-	ch chan specMsg[I, S],
+func (stg *storage[T, S]) gatherResults(
+	ch chan specMsg[S],
 	errCh chan error,
-	orderBys []Lesser[I, S],
+	orderBys []Lesser[S],
 ) (results []S, err error) {
 	var (
 		done bool
@@ -55,8 +55,8 @@ func (stg *storage[T, I, S]) gatherResults(
 	return results, nil
 }
 
-func (*storage[T, I, S]) gatherResult(
-	ch chan specMsg[I, S],
+func (*storage[T, S]) gatherResult(
+	ch chan specMsg[S],
 	errCh chan error,
 ) (s S, done bool, err error) {
 	select {

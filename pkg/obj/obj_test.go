@@ -11,7 +11,7 @@ func TestAnd(t *testing.T) {
 	type test struct {
 		name   string
 		spec   *TestSpec
-		and    Matcher[int, *TestSpec]
+		and    Matcher[*TestSpec]
 		expect bool
 	}
 
@@ -45,7 +45,7 @@ func TestOr(t *testing.T) {
 	type test struct {
 		name   string
 		spec   *TestSpec
-		or     Matcher[int, *TestSpec]
+		or     Matcher[*TestSpec]
 		expect bool
 	}
 
@@ -80,7 +80,7 @@ func TestOrderBy(t *testing.T) {
 		name   string
 		i      *TestSpec
 		j      *TestSpec
-		lesser Lesser[int, *TestSpec]
+		lesser Lesser[*TestSpec]
 		expect int
 	}
 
@@ -145,7 +145,7 @@ func TestOrderBy(t *testing.T) {
 }
 
 func TestMutator(t *testing.T) {
-	mutation := &jsonl.JsonlMutation[int]{
+	mutation := &jsonl.JsonlMutation{
 		From: map[string]any{},
 		To:   map[string]any{},
 	}
@@ -184,7 +184,7 @@ func TestSort(t *testing.T) {
 	type test struct {
 		name    string
 		specs   []*TestSpec
-		lessers []Lesser[int, *TestSpec]
+		lessers []Lesser[*TestSpec]
 		expect  []*TestSpec
 	}
 
@@ -195,7 +195,7 @@ func TestSort(t *testing.T) {
 				{Id: 1, Foo: "a", Bar: "b"},
 				{Id: 2, Foo: "a", Bar: "a"},
 			},
-			lessers: []Lesser[int, *TestSpec]{
+			lessers: []Lesser[*TestSpec]{
 				OrderByFoo,
 				OrderByBar,
 			},
@@ -210,7 +210,7 @@ func TestSort(t *testing.T) {
 				{Id: 1, Foo: "a", Bar: "a"},
 				{Id: 2, Foo: "a", Bar: "b"},
 			},
-			lessers: []Lesser[int, *TestSpec]{
+			lessers: []Lesser[*TestSpec]{
 				OrderByFoo,
 				OrderByBar,
 			},
@@ -225,7 +225,7 @@ func TestSort(t *testing.T) {
 				{Id: 1, Foo: "a", Bar: "a"},
 				{Id: 2, Foo: "a", Bar: "a"},
 			},
-			lessers: []Lesser[int, *TestSpec]{
+			lessers: []Lesser[*TestSpec]{
 				OrderByFoo,
 				OrderByBar,
 			},
