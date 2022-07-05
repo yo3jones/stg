@@ -4,6 +4,11 @@ import (
 	"io"
 )
 
+var EOF = Position{
+	Offset: 0,
+	Len:    0,
+}
+
 func (stg *storage) Read(
 	line []byte,
 ) (position Position, n int, isPrefix bool, err error) {
@@ -12,6 +17,10 @@ func (stg *storage) Read(
 
 	if stg.linePrefix {
 		return stg.fillInputBuffer(line)
+	}
+
+	if stg.scanEof {
+		return position, 0, false, io.EOF
 	}
 
 	if err = stg.readLine(); err != nil {

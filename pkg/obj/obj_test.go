@@ -1,72 +1,11 @@
 package obj
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/yo3jones/stg/pkg/jsonl"
 )
-
-type TestSpec struct {
-	Id  int    `json:"id"`
-	Foo string `json:"foo"`
-	Bar string `json:"bar"`
-}
-
-func (spec *TestSpec) GetId() int {
-	return spec.Id
-}
-
-var (
-	FooAccessor = &fooAccessor{}
-	BarAccessor = &barAccessor{}
-)
-
-var (
-	OrderByFoo     = OrderBy[int, *TestSpec, string](FooAccessor)
-	OrderByFooDesc = OrderByDesc[int, *TestSpec, string](FooAccessor)
-	OrderByBar     = OrderBy[int, *TestSpec, string](BarAccessor)
-	OrderByBarDesc = OrderByDesc[int, *TestSpec, string](BarAccessor)
-)
-
-type fooAccessor struct{}
-
-func (*fooAccessor) Get(s *TestSpec) string {
-	return s.Foo
-}
-
-func (*fooAccessor) Name() string {
-	return "foo"
-}
-
-func (*fooAccessor) Set(s *TestSpec, v string) {
-	s.Foo = v
-}
-
-func FooEquals(v string) Matcher[int, *TestSpec] {
-	return Equals[int, *TestSpec, string](FooAccessor, v)
-}
-
-func MutateFoo(v string) Mutator[string, int, *TestSpec] {
-	return NewMutator[string, int, *TestSpec, string](FooAccessor, v)
-}
-
-type barAccessor struct{}
-
-func (*barAccessor) Get(s *TestSpec) string {
-	return s.Bar
-}
-
-func (*barAccessor) Name() string {
-	return "bar"
-}
-
-func (*barAccessor) Set(s *TestSpec, v string) {
-	s.Bar = v
-}
-
-func BarEquals(v string) Matcher[int, *TestSpec] {
-	return Equals[int, *TestSpec, string](BarAccessor, v)
-}
 
 func TestAnd(t *testing.T) {
 	type test struct {
@@ -79,13 +18,13 @@ func TestAnd(t *testing.T) {
 	tests := []test{
 		{
 			name:   "with all match",
-			spec:   &TestSpec{1, "foo", "bar"},
+			spec:   &TestSpec{Id: 1, Foo: "foo", Bar: "bar"},
 			and:    And(FooEquals("foo"), BarEquals("bar")),
 			expect: true,
 		},
 		{
 			name:   "with one not matched",
-			spec:   &TestSpec{1, "foo", "bar"},
+			spec:   &TestSpec{Id: 1, Foo: "foo", Bar: "bar"},
 			and:    And(FooEquals("foo"), BarEquals("baz")),
 			expect: false,
 		},
@@ -113,13 +52,13 @@ func TestOr(t *testing.T) {
 	tests := []test{
 		{
 			name:   "with one match",
-			spec:   &TestSpec{1, "foo", "bar"},
+			spec:   &TestSpec{Id: 1, Foo: "foo", Bar: "bar"},
 			or:     Or(FooEquals("fiz"), BarEquals("bar")),
 			expect: true,
 		},
 		{
 			name:   "with all not matching",
-			spec:   &TestSpec{1, "foo", "bar"},
+			spec:   &TestSpec{Id: 1, Foo: "foo", Bar: "bar"},
 			or:     Or(FooEquals("fiz"), BarEquals("buz")),
 			expect: false,
 		},
@@ -148,43 +87,43 @@ func TestOrderBy(t *testing.T) {
 	tests := []test{
 		{
 			name:   "with less",
-			i:      &TestSpec{1, "fiz", "bar"},
-			j:      &TestSpec{1, "foo", "bar"},
+			i:      &TestSpec{Id: 1, Foo: "fiz", Bar: "bar"},
+			j:      &TestSpec{Id: 1, Foo: "foo", Bar: "bar"},
 			lesser: OrderByFoo,
 			expect: -1,
 		},
 		{
 			name:   "with not less",
-			i:      &TestSpec{1, "foo", "bar"},
-			j:      &TestSpec{1, "fiz", "bar"},
+			i:      &TestSpec{Id: 1, Foo: "foo", Bar: "bar"},
+			j:      &TestSpec{Id: 1, Foo: "fiz", Bar: "bar"},
 			lesser: OrderByFoo,
 			expect: 1,
 		},
 		{
 			name:   "with equal",
-			i:      &TestSpec{1, "foo", "bar"},
-			j:      &TestSpec{1, "foo", "bar"},
+			i:      &TestSpec{Id: 1, Foo: "foo", Bar: "bar"},
+			j:      &TestSpec{Id: 1, Foo: "foo", Bar: "bar"},
 			lesser: OrderByFoo,
 			expect: 0,
 		},
 		{
 			name:   "with less desc",
-			i:      &TestSpec{1, "fiz", "bar"},
-			j:      &TestSpec{1, "foo", "bar"},
+			i:      &TestSpec{Id: 1, Foo: "fiz", Bar: "bar"},
+			j:      &TestSpec{Id: 1, Foo: "foo", Bar: "bar"},
 			lesser: OrderByFooDesc,
 			expect: 1,
 		},
 		{
 			name:   "with not less desc",
-			i:      &TestSpec{1, "foo", "bar"},
-			j:      &TestSpec{1, "fiz", "bar"},
+			i:      &TestSpec{Id: 1, Foo: "foo", Bar: "bar"},
+			j:      &TestSpec{Id: 1, Foo: "fiz", Bar: "bar"},
 			lesser: OrderByFooDesc,
 			expect: -1,
 		},
 		{
 			name:   "with equal desc",
-			i:      &TestSpec{1, "foo", "bar"},
-			j:      &TestSpec{1, "foo", "bar"},
+			i:      &TestSpec{Id: 1, Foo: "foo", Bar: "bar"},
+			j:      &TestSpec{Id: 1, Foo: "foo", Bar: "bar"},
 			lesser: OrderByFooDesc,
 			expect: 0,
 		},
@@ -238,5 +177,76 @@ func TestMutator(t *testing.T) {
 			"expected mutation to value for Foo to be fiz but got %s",
 			mutation.To["foo"],
 		)
+	}
+}
+
+func TestSort(t *testing.T) {
+	type test struct {
+		name    string
+		specs   []*TestSpec
+		lessers []Lesser[int, *TestSpec]
+		expect  []*TestSpec
+	}
+
+	tests := []test{
+		{
+			name: "with less",
+			specs: []*TestSpec{
+				{Id: 1, Foo: "a", Bar: "b"},
+				{Id: 2, Foo: "a", Bar: "a"},
+			},
+			lessers: []Lesser[int, *TestSpec]{
+				OrderByFoo,
+				OrderByBar,
+			},
+			expect: []*TestSpec{
+				{Id: 2, Foo: "a", Bar: "a"},
+				{Id: 1, Foo: "a", Bar: "b"},
+			},
+		},
+		{
+			name: "without less",
+			specs: []*TestSpec{
+				{Id: 1, Foo: "a", Bar: "a"},
+				{Id: 2, Foo: "a", Bar: "b"},
+			},
+			lessers: []Lesser[int, *TestSpec]{
+				OrderByFoo,
+				OrderByBar,
+			},
+			expect: []*TestSpec{
+				{Id: 1, Foo: "a", Bar: "a"},
+				{Id: 2, Foo: "a", Bar: "b"},
+			},
+		},
+		{
+			name: "with equal",
+			specs: []*TestSpec{
+				{Id: 1, Foo: "a", Bar: "a"},
+				{Id: 2, Foo: "a", Bar: "a"},
+			},
+			lessers: []Lesser[int, *TestSpec]{
+				OrderByFoo,
+				OrderByBar,
+			},
+			expect: []*TestSpec{
+				{Id: 1, Foo: "a", Bar: "a"},
+				{Id: 2, Foo: "a", Bar: "a"},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			Sort(tc.specs, tc.lessers...)
+
+			if !reflect.DeepEqual(tc.specs, tc.expect) {
+				t.Errorf(
+					"expected \n%s\n to be sorted to \n%s\n",
+					testSpecSliceString(tc.specs),
+					testSpecSliceString(tc.expect),
+				)
+			}
+		})
 	}
 }

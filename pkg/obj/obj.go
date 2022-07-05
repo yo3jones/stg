@@ -1,8 +1,10 @@
 package obj
 
 import (
+	"github.com/yo3jones/stg/pkg/fstln"
 	"github.com/yo3jones/stg/pkg/stg"
 	"golang.org/x/exp/constraints"
+	"golang.org/x/exp/slices"
 )
 
 type Storage[T comparable, I comparable, S stg.Spec[I]] interface {
@@ -17,6 +19,18 @@ type Storage[T comparable, I comparable, S stg.Spec[I]] interface {
 		mutators Mutator[T, I, S],
 		orderBys ...Lesser[I, S],
 	) (updated []S, err error)
+}
+
+type storage[T comparable, I comparable, S stg.Spec[I]] struct {
+	stg          fstln.Storage
+	factory      SpecFactory[I, S]
+	unmarshaller stg.Unmarshaller[I, S]
+	concurrency  int
+	bufferLen    int
+}
+
+type SpecFactory[I comparable, S stg.Spec[I]] interface {
+	New() S
 }
 
 type Accessor[I comparable, S stg.Spec[I], T any] interface {
@@ -49,6 +63,16 @@ func NewMutator[T comparable, I comparable, S stg.Spec[I], V comparable](
 
 type Matcher[I comparable, S stg.Spec[I]] interface {
 	Match(s S) bool
+}
+
+type noopMatcher[I comparable, S stg.Spec[I]] struct{}
+
+func (matcher *noopMatcher[I, S]) Match(_ S) bool {
+	return true
+}
+
+func Noop[I comparable, S stg.Spec[I]]() Matcher[I, S] {
+	return &noopMatcher[I, S]{}
 }
 
 type and[I comparable, S stg.Spec[I]] struct {
@@ -141,4 +165,21 @@ func OrderByDesc[I comparable, S stg.Spec[I], T constraints.Ordered](
 	accessor Accessor[I, S, T],
 ) Lesser[I, S] {
 	return &orderBy[I, S, T]{accessor, true}
+}
+
+func Sort[I comparable, S stg.Spec[I]](
+	specs []S,
+	lessers ...Lesser[I, S],
+) {
+	slices.SortFunc(specs, func(a, b S) bool {
+		for _, lesser := range lessers {
+			var res int
+			if res = lesser.Less(a, b); res < 0 {
+				return true
+			} else if res > 0 {
+				return false
+			}
+		}
+		return false
+	})
 }
