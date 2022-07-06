@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/yo3jones/stg/pkg/fstln"
-	"github.com/yo3jones/stg/pkg/stg"
 )
 
 type specMsg[S any] struct {
@@ -26,17 +25,17 @@ const (
 )
 
 type readController[S any] struct {
-	bufferLen    int
-	ch           chan specMsg[S]
-	concurrency  int
-	errCh        chan error
-	factory      SpecFactory[S]
-	filters      Matcher[S]
-	lock         sync.Mutex
-	op           op
-	source       string
-	stg          fstln.Storage
-	unmarshaller stg.Unmarshaller[S]
+	bufferLen           int
+	ch                  chan specMsg[S]
+	concurrency         int
+	errCh               chan error
+	factory             SpecFactory[S]
+	filters             Matcher[S]
+	lock                sync.Mutex
+	op                  op
+	source              string
+	stg                 fstln.Storage
+	marshalUnmarshaller MarshalUnmarshaller[S]
 }
 
 type readControllerOpt interface {
@@ -81,20 +80,20 @@ func newReadController[S any](
 	factory SpecFactory[S],
 	filters Matcher[S],
 	stg fstln.Storage,
-	unmarshaller stg.Unmarshaller[S],
+	marshalUnmarshaller MarshalUnmarshaller[S],
 	opts ...readControllerOpt,
 ) *readController[S] {
 	controller := &readController[S]{
-		bufferLen:    1000,
-		ch:           ch,
-		concurrency:  10,
-		errCh:        errCh,
-		factory:      factory,
-		filters:      filters,
-		op:           opNoop,
-		source:       "",
-		stg:          stg,
-		unmarshaller: unmarshaller,
+		bufferLen:           1000,
+		ch:                  ch,
+		concurrency:         10,
+		errCh:               errCh,
+		factory:             factory,
+		filters:             filters,
+		op:                  opNoop,
+		source:              "",
+		stg:                 stg,
+		marshalUnmarshaller: marshalUnmarshaller,
 	}
 
 	for _, opt := range opts {
@@ -187,7 +186,7 @@ func (proc *readProcess[S]) unmarshal(
 	data := proc.buffer[:pos.Len]
 	s := proc.controller.factory.New()
 
-	err = proc.controller.unmarshaller.Unmarshal(data, s)
+	err = proc.controller.marshalUnmarshaller.Unmarshal(data, s)
 	if err != nil {
 		return msg, err
 	}

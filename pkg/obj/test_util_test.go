@@ -3,19 +3,23 @@ package obj
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/yo3jones/stg/pkg/fstln"
-	"github.com/yo3jones/stg/pkg/jsonl"
 )
 
 type TestSpec struct {
-	Id   int    `json:"id"`
-	Type string `json:"type"`
-	Foo  string `json:"foo"`
-	Bar  string `json:"bar"`
+	Id        int       `json:"id"`
+	Type      string    `json:"type"`
+	Foo       string    `json:"foo"`
+	Bar       string    `json:"bar"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 func (spec *TestSpec) GetId() int {
@@ -41,10 +45,26 @@ func (factory *TestSpecFactory) New() *TestSpec {
 	return &TestSpec{}
 }
 
+type TestNower struct{}
+
+func (*TestNower) Now() time.Time {
+	return GetTestNow()
+}
+
+func GetTestNow() time.Time {
+	now, err := time.Parse(time.RFC3339, "2022-07-06T16:18:00-04:00")
+	if err != nil {
+		fmt.Println(err)
+	}
+	return now
+}
+
 var (
-	IdAccessor  = &idAccessor{}
-	FooAccessor = &fooAccessor{}
-	BarAccessor = &barAccessor{}
+	IdAccessor        = &idAccessor{}
+	FooAccessor       = &fooAccessor{}
+	BarAccessor       = &barAccessor{}
+	UpdatedAtAccessor = &updatedAtAccessor{}
+	CreatedAtAccessor = &createdAtAccessor{}
 )
 
 var (
@@ -68,6 +88,34 @@ func (*idAccessor) Set(s *TestSpec, v int) {
 	s.Id = v
 }
 
+type updatedAtAccessor struct{}
+
+func (*updatedAtAccessor) Get(s *TestSpec) time.Time {
+	return s.UpdatedAt
+}
+
+func (*updatedAtAccessor) Name() string {
+	return "updatedAt"
+}
+
+func (*updatedAtAccessor) Set(s *TestSpec, v time.Time) {
+	s.UpdatedAt = v
+}
+
+type createdAtAccessor struct{}
+
+func (*createdAtAccessor) Get(s *TestSpec) time.Time {
+	return s.CreatedAt
+}
+
+func (*createdAtAccessor) Name() string {
+	return "createdAt"
+}
+
+func (*createdAtAccessor) Set(s *TestSpec, v time.Time) {
+	s.CreatedAt = v
+}
+
 type fooAccessor struct{}
 
 func (*fooAccessor) Get(s *TestSpec) string {
@@ -86,8 +134,8 @@ func FooEquals(v string) Matcher[*TestSpec] {
 	return Equals[*TestSpec, string](FooAccessor, v)
 }
 
-func MutateFoo(v string) Mutator[string, *TestSpec] {
-	return NewMutator[string, *TestSpec, string](FooAccessor, v)
+func MutateFoo(v string) Mutator[*TestSpec] {
+	return NewMutator[*TestSpec, string](FooAccessor, v)
 }
 
 type barAccessor struct{}
@@ -108,10 +156,49 @@ func BarEquals(v string) Matcher[*TestSpec] {
 	return Equals[*TestSpec, string](BarAccessor, v)
 }
 
+func MutateBar(v string) Mutator[*TestSpec] {
+	return NewMutator[*TestSpec, string](BarAccessor, v)
+}
+
 type idFactory struct{}
 
 func (*idFactory) New() int {
 	return 99
+}
+
+type testMarshalUnmarshaller[S any] struct {
+	mockErr          *mockErr
+	marshalCallCount int
+}
+
+func (marshalUnmarshaller *testMarshalUnmarshaller[S]) Marshal(
+	v S,
+) ([]byte, error) {
+	defer func() { marshalUnmarshaller.marshalCallCount++ }()
+	mockErr := marshalUnmarshaller.mockErr
+	if mockErr != nil &&
+		mockErr.mockErrType == mockErrTypeMarshal &&
+		marshalUnmarshaller.marshalCallCount == mockErr.errorOn {
+		return nil, fmt.Errorf("%s", mockErr.msg)
+	}
+	return json.Marshal(v)
+}
+
+func (*testMarshalUnmarshaller[S]) Unmarshal(data []byte, v S) error {
+	return json.Unmarshal(data, v)
+}
+
+func (*testMarshalUnmarshaller[S]) MarshalMutation(
+	mutation *Mutation,
+) ([]byte, error) {
+	return json.Marshal(mutation)
+}
+
+func (*testMarshalUnmarshaller[S]) UnmarshalMutation(
+	data []byte,
+	v *Mutation,
+) error {
+	return json.Unmarshal(data, v)
 }
 
 type testUtil struct {
@@ -122,10 +209,12 @@ type testUtil struct {
 	lines       []string
 	filters     Matcher[*TestSpec]
 	orderBys    []Lesser[*TestSpec]
+	mutators    []Mutator[*TestSpec]
 	bufferLen   int
 	mockError   *mockErr
 	expectError string
 	expect      []*TestSpec
+	expectLines []string
 }
 
 func (util *testUtil) setup() (err error) {
@@ -150,16 +239,25 @@ func (util *testUtil) setup() (err error) {
 	}
 
 	util.stg = &storage[int, string, *TestSpec]{
-		bufferLen:    bufferLen,
-		concurrency:  2,
-		factory:      &TestSpecFactory{},
-		idAccessor:   IdAccessor,
-		idFactory:    &idFactory{},
-		stg:          util.fstlnstg,
-		unmarshaller: &jsonl.JsonlMarshalUnmarshaller[*TestSpec]{},
+		bufferLen:         bufferLen,
+		concurrency:       2,
+		createdAtAccessor: CreatedAtAccessor,
+		factory:           &TestSpecFactory{},
+		idAccessor:        IdAccessor,
+		idFactory:         &idFactory{},
+		nower:             &TestNower{},
+		stg:               util.fstlnstg,
+		marshalUnmarshaller: &testMarshalUnmarshaller[*TestSpec]{
+			mockErr: util.mockError,
+		},
+		updatedAtAccessor: UpdatedAtAccessor,
 	}
 
 	if err = util.writeLines(util.lines); err != nil {
+		return err
+	}
+
+	if err = fstlnstg.ResetScan(); err != nil {
 		return err
 	}
 
@@ -182,6 +280,26 @@ func (util *testUtil) writeLines(lines []string) (err error) {
 	return nil
 }
 
+func (util *testUtil) handleExpectError(err error) (done bool) {
+	if util.expectError != "" && err == nil {
+		util.test.Errorf("expected an error but got nil")
+	}
+
+	if util.expectError != "" && err.Error() != util.expectError {
+		util.test.Errorf(
+			"expected an error with message \n%s\n but got \n%s\n",
+			util.expectError,
+			err.Error(),
+		)
+	}
+
+	if util.expectError != "" {
+		return true
+	}
+
+	return false
+}
+
 func (util *testUtil) expectSelect() {
 	var (
 		err    error
@@ -193,21 +311,7 @@ func (util *testUtil) expectSelect() {
 		OrderBy(util.orderBys...).
 		Run()
 
-	if util.expectError != "" && err == nil {
-		util.test.Errorf("expected an error but got nil")
-		return
-	}
-
-	if util.expectError != "" && err.Error() != util.expectError {
-		util.test.Errorf(
-			"expected an error with message \n%s\n but got \n%s\n",
-			util.expectError,
-			err.Error(),
-		)
-		return
-	}
-
-	if util.expectError != "" {
+	if done := util.handleExpectError(err); done {
 		return
 	}
 
@@ -216,6 +320,47 @@ func (util *testUtil) expectSelect() {
 			"expected select result to be \n%s\n but got \n%s\n",
 			testSpecSliceString(util.expect),
 			testSpecSliceString(result),
+		)
+	}
+}
+
+func (util *testUtil) expectInsert() {
+	var (
+		err          error
+		result       *TestSpec
+		gotBytes     []byte
+		gotString    string
+		expectString string
+	)
+
+	result, err = util.stg.NewInsertBuilder().
+		Set(util.mutators...).
+		Run()
+
+	if done := util.handleExpectError(err); done {
+		return
+	}
+
+	if !reflect.DeepEqual(result, util.expect[0]) {
+		util.test.Errorf(
+			"expected select result to be \n%s\n but got \n%s\n",
+			util.expect[0].String(),
+			result.String(),
+		)
+	}
+
+	if gotBytes, err = ioutil.ReadFile("test.jsonl"); err != nil {
+		util.test.Fatal(err)
+	}
+
+	gotString = string(gotBytes)
+	expectString = fmt.Sprintf("%s\n", strings.Join(util.expectLines, "\n"))
+
+	if gotString != expectString {
+		util.test.Errorf(
+			"expected file contents to be \n%s\n but got \n%s\n",
+			expectString,
+			gotString,
 		)
 	}
 }
@@ -248,6 +393,9 @@ func (mock *mockStg) Delete(
 func (mock *mockStg) Insert(
 	line []byte,
 ) (pos fstln.Position, err error) {
+	if err = mock.handleMockError(mockErrTypeInsert); err != nil {
+		return pos, err
+	}
 	return mock.stg.Insert(line)
 }
 
@@ -331,4 +479,6 @@ type mockErrType int
 const (
 	mockErrTypeResetScan mockErrType = iota
 	mockErrTypeRead
+	mockErrTypeMarshal
+	mockErrTypeInsert
 )

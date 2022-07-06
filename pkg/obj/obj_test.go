@@ -3,8 +3,7 @@ package obj
 import (
 	"reflect"
 	"testing"
-
-	"github.com/yo3jones/stg/pkg/jsonl"
+	"time"
 )
 
 func TestAnd(t *testing.T) {
@@ -145,7 +144,7 @@ func TestOrderBy(t *testing.T) {
 }
 
 func TestMutator(t *testing.T) {
-	mutation := &jsonl.JsonlMutation{
+	mutation := &Mutation{
 		From: map[string]any{},
 		To:   map[string]any{},
 	}
@@ -248,5 +247,64 @@ func TestSort(t *testing.T) {
 				)
 			}
 		})
+	}
+}
+
+func TestMutatorAdd(t *testing.T) {
+	mutator := &Mutation{
+		From: map[string]any{},
+		To:   map[string]any{},
+	}
+
+	mutator.Add("foo", "bar", "baz")
+
+	var (
+		exists bool
+		got    any
+	)
+
+	got, exists = mutator.From["foo"]
+	if !exists {
+		t.Errorf("expected from to contain foo but it did not")
+	}
+	if got != "bar" {
+		t.Errorf("expected from to contain value bar but did not")
+	}
+
+	got, exists = mutator.To["foo"]
+	if !exists {
+		t.Errorf("expected to to contain foo but it did not")
+	}
+	if got != "baz" {
+		t.Errorf("expected to to contain value baz but did not")
+	}
+
+	mutator.Add("foo", "baz", "fuz")
+
+	got, exists = mutator.From["foo"]
+	if !exists {
+		t.Errorf("expected from to contain foo but it did not")
+	}
+	if got != "bar" {
+		t.Errorf("expected from to contain value bar but did not")
+	}
+
+	got, exists = mutator.To["foo"]
+	if !exists {
+		t.Errorf("expected to to contain foo but it did not")
+	}
+	if got != "fuz" {
+		t.Errorf("expected to to contain value fuz but did not")
+	}
+}
+
+func TestNow(t *testing.T) {
+	nower := &nower{}
+
+	var notExpect time.Time
+	got := nower.Now()
+
+	if got.Equal(notExpect) {
+		t.Errorf("expected now to return a time value but got a zero value")
 	}
 }

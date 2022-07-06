@@ -1,20 +1,22 @@
 package obj
 
 import (
+	"time"
+
 	"github.com/yo3jones/stg/pkg/fstln"
-	"github.com/yo3jones/stg/pkg/stg"
 	"golang.org/x/exp/constraints"
 	"golang.org/x/exp/slices"
 )
 
-type Storage[T comparable, S any] interface {
+type Storage[S any] interface {
 	Select(
 		filters Matcher[S],
 		orderBys []Lesser[S],
 	) (results []S, err error)
-	NewSelectBuilder() SelectBuilder[S]
 	// Delete(filters Matcher[S]) (deleted int, err error)
-	// Insert(mutators Mutator[T, S]) (inserted S, err error)
+	Insert(mutators []Mutator[S]) (inserted S, err error)
+	NewSelectBuilder() SelectBuilder[S]
+	NewInsertBuilder() InsertBuilder[S]
 	// Update(
 	// 	filters Matcher[S],
 	// 	mutators Mutator[T, S],
@@ -23,13 +25,84 @@ type Storage[T comparable, S any] interface {
 }
 
 type storage[I comparable, T comparable, S any] struct {
-	bufferLen    int
-	concurrency  int
-	factory      SpecFactory[S]
-	idAccessor   Accessor[S, I]
-	idFactory    IdFactory[I]
-	stg          fstln.Storage
-	unmarshaller stg.Unmarshaller[S]
+	bufferLen           int
+	concurrency         int
+	createdAtAccessor   Accessor[S, time.Time]
+	factory             SpecFactory[S]
+	idAccessor          Accessor[S, I]
+	idFactory           IdFactory[I]
+	nower               Nower
+	stg                 fstln.Storage
+	marshalUnmarshaller MarshalUnmarshaller[S]
+	updatedAtAccessor   Accessor[S, time.Time]
+}
+
+type MarshalUnmarshaller[S any] interface {
+	Marshaller[S]
+	MutationMarshaller
+	MutationUnmarshaller
+	Unmarshaller[S]
+}
+
+type Marshaller[S any] interface {
+	Marshal(v S) ([]byte, error)
+}
+
+type Unmarshaller[S any] interface {
+	Unmarshal(data []byte, v S) error
+}
+
+type MutationMarshaller interface {
+	MarshalMutation(mutation *Mutation) ([]byte, error)
+}
+
+type MutationUnmarshaller interface {
+	UnmarshalMutation(data []byte, v *Mutation) error
+}
+
+type MutationAdder interface {
+	Add(field string, from, to any)
+}
+
+type Mutation struct {
+	TransactionId string         `json:"transactionId"`
+	Timestamp     time.Time      `json:"timestamp"`
+	Type          string         `json:"type"`
+	Id            any            `json:"id"`
+	Partition     string         `json:"partition"`
+	From          map[string]any `json:"from"`
+	To            map[string]any `json:"to"`
+}
+
+func newMutation() *Mutation {
+	return &Mutation{
+		From: map[string]any{},
+		To:   map[string]any{},
+	}
+}
+
+func (mutation *Mutation) Add(field string, from, to any) {
+	if _, exists := mutation.From[field]; !exists {
+		mutation.From[field] = from
+	}
+	mutation.To[field] = to
+
+	// TODO check if the from and to values are equal, if so then remove
+	// this may be tough for non comparable types, might be able to do specific
+	// logic for set, slice and map?
+	//
+	// also need to worry about type safety as we don't have compile time
+	// checking that the from and to types match
+}
+
+type Nower interface {
+	Now() time.Time
+}
+
+type nower struct{}
+
+func (*nower) Now() time.Time {
+	return time.Now()
 }
 
 type SpecFactory[S any] interface {
@@ -46,26 +119,26 @@ type Accessor[S any, T any] interface {
 	Set(s S, v T)
 }
 
-type Mutator[T comparable, S any] interface {
-	Mutate(s S, mutation stg.Mutation[T])
+type Mutator[S any] interface {
+	Mutate(s S, mutation MutationAdder)
 }
 
-type mutator[T comparable, S any, V comparable] struct {
+type mutator[S any, V comparable] struct {
 	accessor Accessor[S, V]
 	value    V
 }
 
-func (mutator *mutator[T, S, V]) Mutate(s S, mutation stg.Mutation[T]) {
+func (mutator *mutator[S, V]) Mutate(s S, mutation MutationAdder) {
 	from := mutator.accessor.Get(s)
 	mutator.accessor.Set(s, mutator.value)
 	mutation.Add(mutator.accessor.Name(), from, mutator.value)
 }
 
-func NewMutator[T comparable, S any, V comparable](
+func NewMutator[S any, V comparable](
 	accessor Accessor[S, V],
 	value V,
-) Mutator[T, S] {
-	return &mutator[T, S, V]{accessor, value}
+) Mutator[S] {
+	return &mutator[S, V]{accessor, value}
 }
 
 type Matcher[S any] interface {

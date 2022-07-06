@@ -15,7 +15,7 @@ func (stg *storage[I, T, S]) Select(
 		stg.factory,
 		filters,
 		stg.stg,
-		stg.unmarshaller,
+		stg.marshalUnmarshaller,
 		optBufferLen{stg.bufferLen},
 		optConcurrency{stg.concurrency},
 	)
@@ -83,7 +83,7 @@ type SelectBuilder[S any] interface {
 type selectBuilder[T comparable, S any] struct {
 	where    Matcher[S]
 	orderBys []Lesser[S]
-	stg      Storage[T, S]
+	stg      Storage[S]
 }
 
 func (builder *selectBuilder[T, S]) Where(
