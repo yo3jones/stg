@@ -8,29 +8,36 @@ import (
 )
 
 type Storage[T comparable, S any] interface {
-	Delete(filters Matcher[S]) (deleted int, err error)
-	Insert(mutators Mutator[T, S]) (inserted S, err error)
 	Select(
 		filters Matcher[S],
-		orderBys ...Lesser[S],
+		orderBys []Lesser[S],
 	) (results []S, err error)
-	Update(
-		filters Matcher[S],
-		mutators Mutator[T, S],
-		orderBys ...Lesser[S],
-	) (updated []S, err error)
+	NewSelectBuilder() SelectBuilder[S]
+	// Delete(filters Matcher[S]) (deleted int, err error)
+	// Insert(mutators Mutator[T, S]) (inserted S, err error)
+	// Update(
+	// 	filters Matcher[S],
+	// 	mutators Mutator[T, S],
+	// 	orderBys ...Lesser[S],
+	// ) (updated []S, err error)
 }
 
-type storage[T comparable, S any] struct {
-	stg          fstln.Storage
-	factory      SpecFactory[S]
-	unmarshaller stg.Unmarshaller[S]
-	concurrency  int
+type storage[I comparable, T comparable, S any] struct {
 	bufferLen    int
+	concurrency  int
+	factory      SpecFactory[S]
+	idAccessor   Accessor[S, I]
+	idFactory    IdFactory[I]
+	stg          fstln.Storage
+	unmarshaller stg.Unmarshaller[S]
 }
 
 type SpecFactory[S any] interface {
 	New() S
+}
+
+type IdFactory[I comparable] interface {
+	New() I
 }
 
 type Accessor[S any, T any] interface {

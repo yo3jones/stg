@@ -203,12 +203,20 @@ func TestRead(t *testing.T) {
 				)
 			}
 
+			if tc.error != nil {
+				return
+			}
+
 			if got != expect {
 				t.Errorf(
 					"expected output to be \n%s\n but got \n%s\n",
 					expect,
 					got,
 				)
+			}
+
+			if pos, _, _, _ := util.Stg.Read([]byte{}); pos != EOF {
+				t.Errorf("expected last read to be eof but was not")
 			}
 		})
 	}

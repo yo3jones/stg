@@ -1,7 +1,5 @@
 package fstln
 
-import "fmt"
-
 func (stg *storage) Maintenance() (freed int, err error) {
 	stg.readLock.Lock()
 	defer stg.readLock.Unlock()
@@ -58,7 +56,6 @@ func (stg *storage) Maintenance() (freed int, err error) {
 
 	err = stg.handle.Truncate(stg.scanEnd - int64(emptyLines.Len))
 	if err != nil {
-		fmt.Println(9)
 		return freed, err
 	}
 

@@ -42,6 +42,7 @@ func (factory *TestSpecFactory) New() *TestSpec {
 }
 
 var (
+	IdAccessor  = &idAccessor{}
 	FooAccessor = &fooAccessor{}
 	BarAccessor = &barAccessor{}
 )
@@ -52,6 +53,20 @@ var (
 	OrderByBar     = OrderBy[*TestSpec, string](BarAccessor)
 	OrderByBarDesc = OrderByDesc[*TestSpec, string](BarAccessor)
 )
+
+type idAccessor struct{}
+
+func (*idAccessor) Get(s *TestSpec) int {
+	return s.Id
+}
+
+func (*idAccessor) Name() string {
+	return "id"
+}
+
+func (*idAccessor) Set(s *TestSpec, v int) {
+	s.Id = v
+}
 
 type fooAccessor struct{}
 
@@ -93,10 +108,16 @@ func BarEquals(v string) Matcher[*TestSpec] {
 	return Equals[*TestSpec, string](BarAccessor, v)
 }
 
+type idFactory struct{}
+
+func (*idFactory) New() int {
+	return 99
+}
+
 type testUtil struct {
 	file        *os.File
 	fstlnstg    fstln.Storage
-	stg         *storage[string, *TestSpec]
+	stg         *storage[int, string, *TestSpec]
 	test        *testing.T
 	lines       []string
 	filters     Matcher[*TestSpec]
@@ -128,12 +149,14 @@ func (util *testUtil) setup() (err error) {
 		bufferLen = util.bufferLen
 	}
 
-	util.stg = &storage[string, *TestSpec]{
-		stg:          util.fstlnstg,
-		factory:      &TestSpecFactory{},
-		unmarshaller: &jsonl.JsonlMarshalUnmarshaller[*TestSpec]{},
-		concurrency:  2,
+	util.stg = &storage[int, string, *TestSpec]{
 		bufferLen:    bufferLen,
+		concurrency:  2,
+		factory:      &TestSpecFactory{},
+		idAccessor:   IdAccessor,
+		idFactory:    &idFactory{},
+		stg:          util.fstlnstg,
+		unmarshaller: &jsonl.JsonlMarshalUnmarshaller[*TestSpec]{},
 	}
 
 	if err = util.writeLines(util.lines); err != nil {
@@ -165,7 +188,10 @@ func (util *testUtil) expectSelect() {
 		result []*TestSpec
 	)
 
-	result, err = util.stg.Select(util.filters, util.orderBys...)
+	result, err = util.stg.NewSelectBuilder().
+		Where(util.filters).
+		OrderBy(util.orderBys...).
+		Run()
 
 	if util.expectError != "" && err == nil {
 		util.test.Errorf("expected an error but got nil")

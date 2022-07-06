@@ -1,8 +1,8 @@
 package obj
 
-func (stg *storage[T, S]) Select(
+func (stg *storage[I, T, S]) Select(
 	filters Matcher[S],
-	orderBys ...Lesser[S],
+	orderBys []Lesser[S],
 ) (results []S, err error) {
 	var (
 		ch    = make(chan specMsg[S], stg.concurrency)
@@ -29,7 +29,7 @@ func (stg *storage[T, S]) Select(
 	return results, nil
 }
 
-func (stg *storage[T, S]) gatherResults(
+func (stg *storage[I, T, S]) gatherResults(
 	ch chan specMsg[S],
 	errCh chan error,
 	orderBys []Lesser[S],
@@ -55,7 +55,7 @@ func (stg *storage[T, S]) gatherResults(
 	return results, nil
 }
 
-func (*storage[T, S]) gatherResult(
+func (*storage[I, T, S]) gatherResult(
 	ch chan specMsg[S],
 	errCh chan error,
 ) (s S, done bool, err error) {
@@ -68,4 +68,38 @@ func (*storage[T, S]) gatherResult(
 	case err := <-errCh:
 		return s, false, err
 	}
+}
+
+func (stg *storage[I, T, S]) NewSelectBuilder() SelectBuilder[S] {
+	return &selectBuilder[T, S]{stg: stg}
+}
+
+type SelectBuilder[S any] interface {
+	Where(filters ...Matcher[S]) SelectBuilder[S]
+	OrderBy(orderBys ...Lesser[S]) SelectBuilder[S]
+	Run() (results []S, err error)
+}
+
+type selectBuilder[T comparable, S any] struct {
+	where    Matcher[S]
+	orderBys []Lesser[S]
+	stg      Storage[T, S]
+}
+
+func (builder *selectBuilder[T, S]) Where(
+	filters ...Matcher[S],
+) SelectBuilder[S] {
+	builder.where = And(filters...)
+	return builder
+}
+
+func (builder *selectBuilder[T, S]) OrderBy(
+	orderBys ...Lesser[S],
+) SelectBuilder[S] {
+	builder.orderBys = orderBys
+	return builder
+}
+
+func (builder *selectBuilder[T, S]) Run() (results []S, err error) {
+	return builder.stg.Select(builder.where, builder.orderBys)
 }
