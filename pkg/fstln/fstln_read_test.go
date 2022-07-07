@@ -81,7 +81,7 @@ func TestRead(t *testing.T) {
 				"   ",
 				"one",
 				"   ",
-				"   ",
+				"",
 				"two",
 				"   ",
 			},

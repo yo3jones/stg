@@ -175,7 +175,7 @@ func (stg *storage) readEmptyLines() (
 			break
 		}
 
-		if b != ' ' {
+		if b != ' ' && b != '\n' {
 			break
 		}
 

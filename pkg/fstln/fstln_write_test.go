@@ -2,6 +2,7 @@ package fstln
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -24,6 +25,21 @@ func TestDelete(t *testing.T) {
 			expect: []string{
 				"   ",
 				"   ",
+			},
+		},
+		{
+			name: "with delete empty lines",
+			lines: []string{
+				"one",
+				"",
+				"two",
+				"    ",
+			},
+			expect: []string{
+				"   ",
+				"",
+				"   ",
+				"    ",
 			},
 		},
 		{
@@ -200,15 +216,16 @@ func TestInsert(t *testing.T) {
 			lines: []string{
 				"before",
 				"",
+				" ",
 				"after",
 			},
 			stripNewLine: true,
 			expect: []string{
 				"before",
 				"",
+				" ",
 				"after",
 				"BEFORE",
-				"",
 				"AFTER",
 			},
 		},
@@ -312,6 +329,38 @@ func TestInsert(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("with empty write", func(t *testing.T) {
+		var (
+			err    error
+			expect = Position{Offset: 0, Len: 1}
+			got    Position
+			util   *TestUtil
+		)
+
+		util, _, err = NewTestUtil().
+			SetTest(t).
+			SetName("test.jsonl").
+			SetLines().
+			Setup()
+		defer util.Teardown()
+
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got, err = util.Stg.Insert([]byte{}); err != nil {
+			t.Fatal(err)
+		}
+
+		if !reflect.DeepEqual(got, expect) {
+			t.Errorf(
+				"expected to write at position \n%v\n but got \n%v\n",
+				expect,
+				got,
+			)
+		}
+	})
 }
 
 func TestUpdate(t *testing.T) {
@@ -384,6 +433,22 @@ func TestUpdate(t *testing.T) {
 				" ",
 				"BA",
 				" ",
+			},
+		},
+		{
+			name: "with empty lines",
+			lines: []string{
+				"     ",
+				"",
+				"foo",
+				"bar",
+			},
+			updater: longer,
+			expect: []string{
+				"FOOFOO",
+				"   ",
+				"   ",
+				"BARBAR",
 			},
 		},
 		{

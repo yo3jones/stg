@@ -33,11 +33,11 @@ func TestMaintenance(t *testing.T) {
 				"   ",
 				"one",
 				"   ",
-				"   ",
+				"",
 				"two",
 				"   ",
 			},
-			expectFreed: 16,
+			expectFreed: 13,
 			expect: []string{
 				"one",
 				"two",
