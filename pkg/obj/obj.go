@@ -40,8 +40,6 @@ type storage[I comparable, T comparable, S any] struct {
 
 type MarshalUnmarshaller[S any] interface {
 	Marshaller[S]
-	MutationMarshaller
-	MutationUnmarshaller
 	Unmarshaller[S]
 }
 
@@ -51,14 +49,6 @@ type Marshaller[S any] interface {
 
 type Unmarshaller[S any] interface {
 	Unmarshal(data []byte, v S) error
-}
-
-type MutationMarshaller interface {
-	MarshalMutation(mutation *Mutation) ([]byte, error)
-}
-
-type MutationUnmarshaller interface {
-	UnmarshalMutation(data []byte, v *Mutation) error
 }
 
 type MutationAdder interface {
@@ -101,6 +91,10 @@ type Nower interface {
 }
 
 type nower struct{}
+
+func NewNower() Nower {
+	return &nower{}
+}
 
 func (*nower) Now() time.Time {
 	return time.Now()

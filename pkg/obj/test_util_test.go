@@ -189,19 +189,6 @@ func (*testMarshalUnmarshaller[S]) Unmarshal(data []byte, v S) error {
 	return json.Unmarshal(data, v)
 }
 
-func (*testMarshalUnmarshaller[S]) MarshalMutation(
-	mutation *Mutation,
-) ([]byte, error) {
-	return json.Marshal(mutation)
-}
-
-func (*testMarshalUnmarshaller[S]) UnmarshalMutation(
-	data []byte,
-	v *Mutation,
-) error {
-	return json.Unmarshal(data, v)
-}
-
 type testUtil struct {
 	file        *os.File
 	fstlnstg    fstln.Storage

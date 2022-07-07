@@ -3,8 +3,6 @@ package jsonl
 import (
 	"reflect"
 	"testing"
-
-	"github.com/yo3jones/stg/pkg/obj"
 )
 
 type TestSpec struct {
@@ -38,27 +36,6 @@ func TestMarshal(t *testing.T) {
 	}
 }
 
-func TestMarshalMutation(t *testing.T) {
-	jsonlMarshalUnmarshaller := &JsonlMarshalUnmarshaller[*TestSpec]{}
-	mutation := &obj.Mutation{Id: "foo"}
-
-	got, err := jsonlMarshalUnmarshaller.MarshalMutation(mutation)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	gotString := string(got)
-	expect := `{"transactionId":"","timestamp":"0001-01-01T00:00:00Z","type":"","id":"foo","partition":"","from":null,"to":null}`
-
-	if gotString != expect {
-		t.Errorf(
-			"expected the mutation unmarshal value to be \n%s\n but got \n%s\n",
-			expect,
-			gotString,
-		)
-	}
-}
-
 func TestUnmarshal(t *testing.T) {
 	jsonlMarshalUnmarshaller := &JsonlMarshalUnmarshaller[*TestSpec]{}
 	data := []byte(`{"id":1,"foo":"foo","bar":"bar"}`)
@@ -73,28 +50,5 @@ func TestUnmarshal(t *testing.T) {
 
 	if !reflect.DeepEqual(got, expect) {
 		t.Errorf("expected unmarshalled value to be %v but got %v", expect, got)
-	}
-}
-
-func TestMutationUnmarshal(t *testing.T) {
-	jsonlMarshalUnmarshaller := &JsonlMarshalUnmarshaller[*TestSpec]{}
-	data := []byte(
-		`{"transactionId":"","timestamp":"0001-01-01T00:00:00Z","type":"","id":"foo","partition":"","from":null,"to":null}`,
-	)
-	got := &obj.Mutation{}
-
-	err := jsonlMarshalUnmarshaller.UnmarshalMutation([]byte(data), got)
-	expect := &obj.Mutation{Id: "foo"}
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !reflect.DeepEqual(got, expect) {
-		t.Errorf(
-			"expected unmarshalled mutation value to be %v but got %v",
-			expect,
-			got,
-		)
 	}
 }
