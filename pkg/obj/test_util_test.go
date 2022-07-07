@@ -68,6 +68,7 @@ var (
 )
 
 var (
+	OrderById      = OrderBy[*TestSpec, int](IdAccessor)
 	OrderByFoo     = OrderBy[*TestSpec, string](FooAccessor)
 	OrderByFooDesc = OrderByDesc[*TestSpec, string](FooAccessor)
 	OrderByBar     = OrderBy[*TestSpec, string](BarAccessor)
@@ -281,11 +282,20 @@ func (util *testUtil) writeLines(lines []string) (err error) {
 }
 
 func (util *testUtil) handleExpectError(err error) (done bool) {
-	if util.expectError != "" && err == nil {
+	if util.expectError == "" && err != nil {
+		util.test.Fatal(err)
+		return true
+	}
+
+	if util.expectError == "" {
+		return false
+	}
+
+	if err == nil {
 		util.test.Errorf("expected an error but got nil")
 	}
 
-	if util.expectError != "" && err.Error() != util.expectError {
+	if err.Error() != util.expectError {
 		util.test.Errorf(
 			"expected an error with message \n%s\n but got \n%s\n",
 			util.expectError,
@@ -293,11 +303,7 @@ func (util *testUtil) handleExpectError(err error) (done bool) {
 		)
 	}
 
-	if util.expectError != "" {
-		return true
-	}
-
-	return false
+	return true
 }
 
 func (util *testUtil) expectSelect() {
@@ -315,22 +321,13 @@ func (util *testUtil) expectSelect() {
 		return
 	}
 
-	if !reflect.DeepEqual(result, util.expect) {
-		util.test.Errorf(
-			"expected select result to be \n%s\n but got \n%s\n",
-			testSpecSliceString(util.expect),
-			testSpecSliceString(result),
-		)
-	}
+	util.expectSpecs(result...)
 }
 
 func (util *testUtil) expectInsert() {
 	var (
-		err          error
-		result       *TestSpec
-		gotBytes     []byte
-		gotString    string
-		expectString string
+		err    error
+		result *TestSpec
 	)
 
 	result, err = util.stg.NewInsertBuilder().
@@ -341,13 +338,49 @@ func (util *testUtil) expectInsert() {
 		return
 	}
 
-	if !reflect.DeepEqual(result, util.expect[0]) {
+	util.expectSpecs(result)
+
+	util.handleExpectLines()
+}
+
+func (util *testUtil) expectDelete() {
+	var (
+		err    error
+		result []*TestSpec
+	)
+
+	result, err = util.stg.NewDeleteBuilder().
+		Where(util.filters).
+		Run()
+
+	Sort(result, OrderById)
+
+	if done := util.handleExpectError(err); done {
+		return
+	}
+
+	util.expectSpecs(result...)
+
+	util.handleExpectLines()
+}
+
+func (util *testUtil) expectSpecs(got ...*TestSpec) {
+	if !reflect.DeepEqual(got, util.expect) {
 		util.test.Errorf(
 			"expected select result to be \n%s\n but got \n%s\n",
-			util.expect[0].String(),
-			result.String(),
+			testSpecSliceString(util.expect),
+			testSpecSliceString(got),
 		)
 	}
+}
+
+func (util *testUtil) handleExpectLines() {
+	var (
+		err          error
+		gotBytes     []byte
+		gotString    string
+		expectString string
+	)
 
 	if gotBytes, err = ioutil.ReadFile("test.jsonl"); err != nil {
 		util.test.Fatal(err)
@@ -387,6 +420,9 @@ type mockStg struct {
 func (mock *mockStg) Delete(
 	pos fstln.Position,
 ) (err error) {
+	if err = mock.handleMockError(mockErrTypeDelete); err != nil {
+		return err
+	}
 	return mock.stg.Delete(pos)
 }
 
@@ -481,4 +517,5 @@ const (
 	mockErrTypeRead
 	mockErrTypeMarshal
 	mockErrTypeInsert
+	mockErrTypeDelete
 )

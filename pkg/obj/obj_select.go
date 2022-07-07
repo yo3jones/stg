@@ -9,65 +9,15 @@ func (stg *storage[I, T, S]) Select(
 		errCh = make(chan error, stg.concurrency)
 	)
 
-	controller := newReadController(
-		ch,
-		errCh,
-		stg.factory,
-		filters,
-		stg.stg,
-		stg.marshalUnmarshaller,
-		optBufferLen{stg.bufferLen},
-		optConcurrency{stg.concurrency},
-	)
+	controller := stg.newReadController(ch, errCh, filters, opNoop)
 
 	go controller.Start()
 
-	if results, err = stg.gatherResults(ch, errCh, orderBys); err != nil {
+	if results, err = stg.gatherResults(ch, errCh, orderBys...); err != nil {
 		return nil, err
 	}
 
 	return results, nil
-}
-
-func (stg *storage[I, T, S]) gatherResults(
-	ch chan specMsg[S],
-	errCh chan error,
-	orderBys []Lesser[S],
-) (results []S, err error) {
-	var (
-		done bool
-		s    S
-	)
-	results = make([]S, 0, 100)
-
-	for {
-		if s, done, err = stg.gatherResult(ch, errCh); err != nil {
-			return nil, err
-		} else if done {
-			break
-		} else {
-			results = append(results, s)
-		}
-	}
-
-	Sort(results, orderBys...)
-
-	return results, nil
-}
-
-func (*storage[I, T, S]) gatherResult(
-	ch chan specMsg[S],
-	errCh chan error,
-) (s S, done bool, err error) {
-	select {
-	case msg := <-ch:
-		if msg.op == opDone {
-			return s, true, nil
-		}
-		return msg.spec, false, nil
-	case err := <-errCh:
-		return s, false, err
-	}
 }
 
 func (stg *storage[I, T, S]) NewSelectBuilder() SelectBuilder[S] {

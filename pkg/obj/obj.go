@@ -9,14 +9,15 @@ import (
 )
 
 type Storage[S any] interface {
+	Delete(filters Matcher[S]) (deleted []S, err error)
+	Insert(mutators []Mutator[S]) (inserted S, err error)
 	Select(
 		filters Matcher[S],
 		orderBys []Lesser[S],
 	) (results []S, err error)
-	// Delete(filters Matcher[S]) (deleted int, err error)
-	Insert(mutators []Mutator[S]) (inserted S, err error)
-	NewSelectBuilder() SelectBuilder[S]
+	NewDeleteBuilder() DeleteBuilder[S]
 	NewInsertBuilder() InsertBuilder[S]
+	NewSelectBuilder() SelectBuilder[S]
 	// Update(
 	// 	filters Matcher[S],
 	// 	mutators Mutator[T, S],
@@ -262,4 +263,12 @@ func Sort[S any](
 		}
 		return false
 	})
+}
+
+type optBufferLen struct {
+	value int
+}
+
+type optConcurrency struct {
+	value int
 }

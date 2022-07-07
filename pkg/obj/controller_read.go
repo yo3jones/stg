@@ -7,23 +7,6 @@ import (
 	"github.com/yo3jones/stg/pkg/fstln"
 )
 
-type specMsg[S any] struct {
-	op     op
-	pos    fstln.Position
-	source string
-	spec   S
-}
-
-type op int
-
-const (
-	opNoop op = iota
-	// opDelete
-	// opInsert
-	// opUpdate
-	opDone
-)
-
 type readController[S any] struct {
 	bufferLen           int
 	ch                  chan specMsg[S]
@@ -42,32 +25,16 @@ type readControllerOpt interface {
 	isReadControllerOpt() bool
 }
 
-type optBufferLen struct {
-	value int
-}
-
 func (opt optBufferLen) isReadControllerOpt() bool {
 	return true
-}
-
-type optConcurrency struct {
-	value int
 }
 
 func (opt optConcurrency) isReadControllerOpt() bool {
 	return true
 }
 
-type optOp struct {
-	value op
-}
-
 func (opt optOp) isReadControllerOpt() bool {
 	return true
-}
-
-type optSource struct {
-	value string
 }
 
 func (opt optSource) isReadControllerOpt() bool {
@@ -97,9 +64,7 @@ func newReadController[S any](
 	}
 
 	for _, opt := range opts {
-		if !opt.isReadControllerOpt() {
-			continue
-		}
+		opt.isReadControllerOpt()
 		switch opt := opt.(type) {
 		case optBufferLen:
 			controller.bufferLen = opt.value
