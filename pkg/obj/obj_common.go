@@ -1,5 +1,7 @@
 package obj
 
+import "time"
+
 func (stg *storage[I, T, S]) newReadController(
 	ch chan specMsg[S],
 	errCh chan error,
@@ -24,6 +26,7 @@ func (stg *storage[I, T, S]) newWriteController(
 	outCh chan specMsg[S],
 	errCh chan error,
 	mutators []Mutator[S],
+	now time.Time,
 ) *writeController[S] {
 	return newWriteController(
 		inCh,
@@ -32,6 +35,8 @@ func (stg *storage[I, T, S]) newWriteController(
 		mutators,
 		stg.stg,
 		stg.marshalUnmarshaller,
+		stg.updatedAtAccessor,
+		now,
 		optConcurrency{stg.concurrency},
 	)
 }
@@ -46,10 +51,11 @@ func (stg *storage[I, T, S]) runReadWrite(
 		inCh  = make(chan specMsg[S], stg.concurrency)
 		outCh = make(chan specMsg[S], stg.concurrency)
 		errCh = make(chan error, stg.concurrency)
+		now   = stg.nower.Now()
 	)
 
 	readController := stg.newReadController(inCh, errCh, filters, op)
-	writeController := stg.newWriteController(inCh, outCh, errCh, mutators)
+	writeController := stg.newWriteController(inCh, outCh, errCh, mutators, now)
 
 	go readController.Start()
 	go writeController.Start()

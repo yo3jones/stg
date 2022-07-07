@@ -293,6 +293,7 @@ func (util *testUtil) handleExpectError(err error) (done bool) {
 
 	if err == nil {
 		util.test.Errorf("expected an error but got nil")
+		return true
 	}
 
 	if err.Error() != util.expectError {
@@ -301,6 +302,7 @@ func (util *testUtil) handleExpectError(err error) (done bool) {
 			util.expectError,
 			err.Error(),
 		)
+		return true
 	}
 
 	return true
@@ -354,6 +356,27 @@ func (util *testUtil) expectDelete() {
 		Run()
 
 	Sort(result, OrderById)
+
+	if done := util.handleExpectError(err); done {
+		return
+	}
+
+	util.expectSpecs(result...)
+
+	util.handleExpectLines()
+}
+
+func (util *testUtil) expectUpdate() {
+	var (
+		err    error
+		result []*TestSpec
+	)
+
+	result, err = util.stg.NewUpdateBuilder().
+		Where(util.filters).
+		Set(util.mutators...).
+		OrderBy(util.orderBys...).
+		Run()
 
 	if done := util.handleExpectError(err); done {
 		return
@@ -459,6 +482,9 @@ func (mock *mockStg) Update(
 	pos fstln.Position,
 	line []byte,
 ) (afterPos fstln.Position, err error) {
+	if err = mock.handleMockError(mockErrTypeUpdate); err != nil {
+		return afterPos, err
+	}
 	return mock.stg.Update(pos, line)
 }
 
@@ -518,4 +544,5 @@ const (
 	mockErrTypeMarshal
 	mockErrTypeInsert
 	mockErrTypeDelete
+	mockErrTypeUpdate
 )

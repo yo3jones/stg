@@ -15,7 +15,7 @@ const (
 	opNoop op = iota
 	opDelete
 	// opInsert
-	// opUpdate
+	opUpdate
 	opDone
 )
 

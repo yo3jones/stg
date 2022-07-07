@@ -18,11 +18,11 @@ type Storage[S any] interface {
 	NewDeleteBuilder() DeleteBuilder[S]
 	NewInsertBuilder() InsertBuilder[S]
 	NewSelectBuilder() SelectBuilder[S]
-	// Update(
-	// 	filters Matcher[S],
-	// 	mutators Mutator[T, S],
-	// 	orderBys ...Lesser[S],
-	// ) (updated []S, err error)
+	Update(
+		filters Matcher[S],
+		mutators []Mutator[S],
+		orderBys []Lesser[S],
+	) (updated []S, err error)
 }
 
 type storage[I comparable, T comparable, S any] struct {
