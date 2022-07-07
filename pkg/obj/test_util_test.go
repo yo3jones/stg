@@ -215,7 +215,7 @@ type testUtil struct {
 	mockError   *mockErr
 	expectError string
 	expect      []*TestSpec
-	expectLines []string
+	expectLines [][]string
 }
 
 func (util *testUtil) setup() (err error) {
@@ -400,6 +400,7 @@ func (util *testUtil) expectSpecs(got ...*TestSpec) {
 func (util *testUtil) handleExpectLines() {
 	var (
 		err          error
+		found        bool
 		gotBytes     []byte
 		gotString    string
 		expectString string
@@ -410,9 +411,19 @@ func (util *testUtil) handleExpectLines() {
 	}
 
 	gotString = string(gotBytes)
-	expectString = fmt.Sprintf("%s\n", strings.Join(util.expectLines, "\n"))
+	for _, expectLines := range util.expectLines {
+		expectString = fmt.Sprintf("%s\n", strings.Join(expectLines, "\n"))
+		if gotString == expectString {
+			found = true
+			break
+		}
+	}
 
-	if gotString != expectString {
+	if !found {
+		expectString = fmt.Sprintf(
+			"%s\n",
+			strings.Join(util.expectLines[0], "\n"),
+		)
 		util.test.Errorf(
 			"expected file contents to be \n%s\n but got \n%s\n",
 			expectString,

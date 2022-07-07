@@ -10,7 +10,7 @@ func TestDelete(t *testing.T) {
 		mockErr     *mockErr
 		expectError string
 		expect      []*TestSpec
-		expectLines []string
+		expectLines [][]string
 	}
 
 	tests := []test{
@@ -26,10 +26,12 @@ func TestDelete(t *testing.T) {
 				{Id: 1, Foo: "foo", Bar: "bar"},
 				{Id: 2, Foo: "fiz", Bar: "bar"},
 			},
-			expectLines: []string{
-				`                                `,
-				`                                `,
-				`{"id":3,"foo":"fam","bar":"baz"}`,
+			expectLines: [][]string{
+				{
+					`                                `,
+					`                                `,
+					`{"id":3,"foo":"fam","bar":"baz"}`,
+				},
 			},
 		},
 		{

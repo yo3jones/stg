@@ -12,7 +12,7 @@ func TestUpdate(t *testing.T) {
 		mockErr     *mockErr
 		expectError string
 		expect      []*TestSpec
-		expectLines []string
+		expectLines [][]string
 	}
 
 	tests := []test{
@@ -34,12 +34,21 @@ func TestUpdate(t *testing.T) {
 				{Id: 1, Foo: "FOO", Bar: "bar", UpdatedAt: GetTestNow()},
 				{Id: 2, Foo: "FOO", Bar: "bar", UpdatedAt: GetTestNow()},
 			},
-			expectLines: []string{
-				`                                `,
-				`                                `,
-				`{"id":3,"foo":"fam","bar":"baz"}`,
-				`{"id":1,"type":"","foo":"FOO","bar":"bar","updatedAt":"2022-07-06T16:18:00-04:00","createdAt":"0001-01-01T00:00:00Z"}`,
-				`{"id":2,"type":"","foo":"FOO","bar":"bar","updatedAt":"2022-07-06T16:18:00-04:00","createdAt":"0001-01-01T00:00:00Z"}`,
+			expectLines: [][]string{
+				{
+					`                                `,
+					`                                `,
+					`{"id":3,"foo":"fam","bar":"baz"}`,
+					`{"id":1,"type":"","foo":"FOO","bar":"bar","updatedAt":"2022-07-06T16:18:00-04:00","createdAt":"0001-01-01T00:00:00Z"}`,
+					`{"id":2,"type":"","foo":"FOO","bar":"bar","updatedAt":"2022-07-06T16:18:00-04:00","createdAt":"0001-01-01T00:00:00Z"}`,
+				},
+				{
+					`                                `,
+					`                                `,
+					`{"id":3,"foo":"fam","bar":"baz"}`,
+					`{"id":2,"type":"","foo":"FOO","bar":"bar","updatedAt":"2022-07-06T16:18:00-04:00","createdAt":"0001-01-01T00:00:00Z"}`,
+					`{"id":1,"type":"","foo":"FOO","bar":"bar","updatedAt":"2022-07-06T16:18:00-04:00","createdAt":"0001-01-01T00:00:00Z"}`,
+				},
 			},
 		},
 		{

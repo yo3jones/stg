@@ -12,7 +12,7 @@ func TestInsert(t *testing.T) {
 		mockErr     *mockErr
 		expectError string
 		expect      *TestSpec
-		expectLines []string
+		expectLines [][]string
 	}
 
 	tests := []test{
@@ -33,10 +33,12 @@ func TestInsert(t *testing.T) {
 				UpdatedAt: GetTestNow(),
 				CreatedAt: GetTestNow(),
 			},
-			expectLines: []string{
-				`{"id":1,"foo":"foo","bar":"bar"}`,
-				`{"id":2,"foo":"fiz","bar":"buz"}`,
-				`{"id":99,"type":"","foo":"foo","bar":"bar","updatedAt":"2022-07-06T16:18:00-04:00","createdAt":"2022-07-06T16:18:00-04:00"}`,
+			expectLines: [][]string{
+				{
+					`{"id":1,"foo":"foo","bar":"bar"}`,
+					`{"id":2,"foo":"fiz","bar":"buz"}`,
+					`{"id":99,"type":"","foo":"foo","bar":"bar","updatedAt":"2022-07-06T16:18:00-04:00","createdAt":"2022-07-06T16:18:00-04:00"}`,
+				},
 			},
 		},
 		{
