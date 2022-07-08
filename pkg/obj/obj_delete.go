@@ -3,6 +3,8 @@ package obj
 func (stg *storage[I, S]) Delete(
 	filters Matcher[S],
 ) (deleted []S, err error) {
+	stg.lock.Lock()
+	defer stg.lock.Unlock()
 	return stg.runReadWrite(opDelete, filters, []Mutator[S]{})
 }
 

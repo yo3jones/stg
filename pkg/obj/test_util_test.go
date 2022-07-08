@@ -175,6 +175,8 @@ func (util *testUtil) expectInsert() {
 	util.expectSpecs(result)
 
 	util.handleExpectLines()
+
+	util.handleExpectBinLog()
 }
 
 func (util *testUtil) expectDelete() {

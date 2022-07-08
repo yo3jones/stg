@@ -3,7 +3,14 @@ package obj
 func (stg *storage[I, S]) Insert(
 	mutators []Mutator[S],
 ) (inserted S, err error) {
-	var data []byte
+	stg.lock.Lock()
+	defer stg.lock.Unlock()
+	var (
+		data  []byte
+		trans = stg.binLogStg.StartTransaction(stg.objType)
+	)
+	defer trans.End()
+
 	inserted = stg.factory.New()
 
 	now := stg.nower.Now()
@@ -16,6 +23,10 @@ func (stg *storage[I, S]) Insert(
 	}
 
 	if data, err = stg.marshalUnmarshaller.Marshal(inserted); err != nil {
+		return inserted, err
+	}
+
+	if err = trans.LogInsert(stg.idAccessor.Get(inserted), data); err != nil {
 		return inserted, err
 	}
 

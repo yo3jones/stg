@@ -5,6 +5,8 @@ func (stg *storage[I, S]) Update(
 	mutators []Mutator[S],
 	orderBys []Lesser[S],
 ) (updated []S, err error) {
+	stg.lock.Lock()
+	defer stg.lock.Unlock()
 	return stg.runReadWrite(opUpdate, filters, mutators, orderBys...)
 }
 

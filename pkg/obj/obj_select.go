@@ -4,6 +4,8 @@ func (stg *storage[I, S]) Select(
 	filters Matcher[S],
 	orderBys []Lesser[S],
 ) (results []S, err error) {
+	stg.lock.Lock()
+	defer stg.lock.Unlock()
 	var (
 		ch    = make(chan specMsg[S], stg.concurrency)
 		errCh = make(chan error, stg.concurrency)

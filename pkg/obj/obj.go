@@ -1,6 +1,7 @@
 package obj
 
 import (
+	"sync"
 	"time"
 
 	"github.com/yo3jones/stg/pkg/fstln"
@@ -35,6 +36,7 @@ type storage[I comparable, S any] struct {
 	factory             SpecFactory[S]
 	idAccessor          Accessor[S, I]
 	idFactory           stg.IdFactory[I]
+	lock                sync.Mutex
 	nower               stg.Nower
 	objType             string
 	stg                 fstln.Storage
