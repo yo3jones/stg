@@ -169,6 +169,16 @@ func (controller *writeController[I, S]) processUpdateMsg(msg specMsg[S]) {
 		return
 	}
 
+	err = controller.binLogTrans.LogUpdate(
+		controller.idAccessor.Get(msg.spec),
+		msg.raw,
+		data,
+	)
+	if err != nil {
+		controller.errCh <- err
+		return
+	}
+
 	if afterPos, err = controller.stg.Update(msg.pos, data); err != nil {
 		controller.errCh <- err
 		return

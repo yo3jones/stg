@@ -221,6 +221,8 @@ func (util *testUtil) expectUpdate() {
 	util.expectSpecs(result...)
 
 	util.handleExpectLines()
+
+	util.handleExpectBinLog()
 }
 
 func (util *testUtil) expectSpecs(got ...*TestSpec) {
