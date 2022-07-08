@@ -5,6 +5,7 @@ import "github.com/yo3jones/stg/pkg/fstln"
 type specMsg[S any] struct {
 	op     op
 	pos    fstln.Position
+	raw    []byte
 	source string
 	spec   S
 }
@@ -23,6 +24,6 @@ type optOp struct {
 	value op
 }
 
-type optSource struct {
-	value string
-}
+// type optSource struct {
+// 	value string
+// }

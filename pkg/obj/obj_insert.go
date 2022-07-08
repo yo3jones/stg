@@ -1,12 +1,10 @@
 package obj
 
-func (stg *storage[I, T, S]) Insert(
+func (stg *storage[I, S]) Insert(
 	mutators []Mutator[S],
 ) (inserted S, err error) {
 	var data []byte
 	inserted = stg.factory.New()
-
-	mutation := newMutation()
 
 	now := stg.nower.Now()
 	stg.idAccessor.Set(inserted, stg.idFactory.New())
@@ -14,7 +12,7 @@ func (stg *storage[I, T, S]) Insert(
 	stg.createdAtAccessor.Set(inserted, now)
 
 	for _, mutator := range mutators {
-		mutator.Mutate(inserted, mutation)
+		mutator.Mutate(inserted)
 	}
 
 	if data, err = stg.marshalUnmarshaller.Marshal(inserted); err != nil {
@@ -30,7 +28,7 @@ func (stg *storage[I, T, S]) Insert(
 	return inserted, nil
 }
 
-func (stg *storage[I, T, S]) NewInsertBuilder() InsertBuilder[S] {
+func (stg *storage[I, S]) NewInsertBuilder() InsertBuilder[S] {
 	return &insertBuilder[S]{stg: stg}
 }
 

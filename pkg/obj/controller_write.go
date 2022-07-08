@@ -5,14 +5,18 @@ import (
 	"time"
 
 	"github.com/yo3jones/stg/pkg/fstln"
+	"github.com/yo3jones/stg/pkg/objbinlog"
+	"github.com/yo3jones/stg/pkg/stg"
 )
 
-type writeController[S any] struct {
+type writeController[I comparable, S any] struct {
+	binLogTrans         objbinlog.Transaction
 	concurrency         int
 	errCh               chan error
+	idAccessor          Accessor[S, I]
 	inCh                chan specMsg[S]
 	outCh               chan specMsg[S]
-	marshalUnmarshaller MarshalUnmarshaller[S]
+	marshalUnmarshaller stg.MarshalUnmarshaller[S]
 	mutators            []Mutator[S]
 	now                 time.Time
 	source              string
@@ -20,18 +24,22 @@ type writeController[S any] struct {
 	updatedAtAccessor   Accessor[S, time.Time]
 }
 
-func newWriteController[S any](
+func newWriteController[I comparable, S any](
 	inCh, outCh chan specMsg[S],
 	errCh chan error,
 	mutators []Mutator[S],
 	stg fstln.Storage,
-	marshalUnmarshaller MarshalUnmarshaller[S],
+	binLogTrans objbinlog.Transaction,
+	marshalUnmarshaller stg.MarshalUnmarshaller[S],
+	idAccessor Accessor[S, I],
 	updatedAtAccessor Accessor[S, time.Time],
 	now time.Time,
 	opts ...writeControllerOpt,
-) *writeController[S] {
-	controller := &writeController[S]{
+) *writeController[I, S] {
+	controller := &writeController[I, S]{
+		binLogTrans:         binLogTrans,
 		concurrency:         10,
+		idAccessor:          idAccessor,
 		inCh:                inCh,
 		outCh:               outCh,
 		errCh:               errCh,
@@ -48,8 +56,8 @@ func newWriteController[S any](
 		switch opt := opt.(type) {
 		case optConcurrency:
 			controller.concurrency = opt.value
-		case optSource:
-			controller.source = opt.value
+			// case optSource:
+			// 	controller.source = opt.value
 		}
 	}
 
@@ -64,29 +72,18 @@ func (opt optConcurrency) isWriteControllerOpt() bool {
 	return true
 }
 
-func (opt optSource) isWriteControllerOpt() bool {
-	return true
-}
+// func (opt optSource) isWriteControllerOpt() bool {
+// 	return true
+// }
 
-func (controller *writeController[S]) Start() {
+func (controller *writeController[I, S]) Start() {
 	waitGroup := sync.WaitGroup{}
 
 	for i := 0; i < controller.concurrency; i++ {
-		proc := &writeProcess[S]{
-			errCh:               controller.errCh,
-			inCh:                controller.inCh,
-			outCh:               controller.outCh,
-			marshalUnmarshaller: controller.marshalUnmarshaller,
-			mutators:            controller.mutators,
-			now:                 controller.now,
-			stg:                 controller.stg,
-			updatedAtAccessor:   controller.updatedAtAccessor,
-		}
-
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			proc.Start()
+			controller.startProc()
 		}()
 	}
 
@@ -98,84 +95,86 @@ func (controller *writeController[S]) Start() {
 	}
 }
 
-type writeProcess[S any] struct {
-	errCh               chan error
-	inCh                chan specMsg[S]
-	outCh               chan specMsg[S]
-	marshalUnmarshaller MarshalUnmarshaller[S]
-	mutators            []Mutator[S]
-	now                 time.Time
-	stg                 fstln.Storage
-	updatedAtAccessor   Accessor[S, time.Time]
-}
-
-func (proc *writeProcess[S]) Start() {
+func (controller *writeController[I, S]) startProc() {
 	for {
-		if done := proc.processMsg(); done {
+		if done := controller.processMsg(); done {
 			break
 		}
 	}
 }
 
-func (proc *writeProcess[S]) processMsg() (done bool) {
+func (controller *writeController[I, S]) processMsg() (done bool) {
 	var (
 		ok  bool
 		msg specMsg[S]
 	)
 
-	if msg, ok = <-proc.inCh; !ok {
+	if msg, ok = <-controller.inCh; !ok {
 		return true
 	}
 
 	switch msg.op {
 	case opDone:
-		close(proc.inCh)
+		close(controller.inCh)
 		return true
 	case opDelete:
-		proc.processDeleteMsg(msg)
+		controller.processDeleteMsg(msg)
 	case opUpdate:
-		proc.processUpdateMsg(msg)
+		controller.processUpdateMsg(msg)
 	}
 
 	return false
 }
 
-func (proc *writeProcess[S]) processDeleteMsg(msg specMsg[S]) {
-	if err := proc.stg.Delete(msg.pos); err != nil {
-		proc.errCh <- err
+func (controller *writeController[I, S]) processDeleteMsg(msg specMsg[S]) {
+	var err error
+
+	err = controller.binLogTrans.LogDelete(
+		controller.idAccessor.Get(msg.spec),
+		msg.raw,
+	)
+	if err != nil {
+		controller.errCh <- err
 		return
 	}
 
-	proc.outCh <- msg
+	if err = controller.stg.Delete(msg.pos); err != nil {
+		controller.errCh <- err
+		return
+	}
+
+	controller.outCh <- msg
 }
 
-func (proc *writeProcess[S]) processUpdateMsg(msg specMsg[S]) {
+func (controller *writeController[I, S]) processUpdateMsg(msg specMsg[S]) {
 	var (
 		afterPos fstln.Position
 		data     []byte
 		err      error
-		mutation = newMutation()
-		mutators = make([]Mutator[S], 0, len(proc.mutators)+1)
+		mutators = make([]Mutator[S], 0, len(controller.mutators)+1)
 	)
 
-	mutators = append(mutators, NewMutator(proc.updatedAtAccessor, proc.now))
-	mutators = append(mutators, proc.mutators...)
+	mutators = append(
+		mutators,
+		NewMutator(controller.updatedAtAccessor, controller.now),
+	)
+	mutators = append(mutators, controller.mutators...)
 
 	for _, mutator := range mutators {
-		mutator.Mutate(msg.spec, mutation)
+		mutator.Mutate(msg.spec)
 	}
 
-	if data, err = proc.marshalUnmarshaller.Marshal(msg.spec); err != nil {
-		proc.errCh <- err
+	if data, err = controller.marshalUnmarshaller.Marshal(msg.spec); err != nil {
+		controller.errCh <- err
 		return
 	}
 
-	if afterPos, err = proc.stg.Update(msg.pos, data); err != nil {
-		proc.errCh <- err
+	if afterPos, err = controller.stg.Update(msg.pos, data); err != nil {
+		controller.errCh <- err
 		return
 	}
 
-	proc.outCh <- specMsg[S]{
+	controller.outCh <- specMsg[S]{
 		op:     msg.op,
 		pos:    afterPos,
 		source: msg.source,

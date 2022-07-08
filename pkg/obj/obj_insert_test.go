@@ -27,7 +27,7 @@ func TestInsert(t *testing.T) {
 				MutateBar("bar"),
 			},
 			expect: &TestSpec{
-				Id:        99,
+				Id:        100,
 				Foo:       "foo",
 				Bar:       "bar",
 				UpdatedAt: GetTestNow(),
@@ -37,7 +37,7 @@ func TestInsert(t *testing.T) {
 				{
 					`{"id":1,"foo":"foo","bar":"bar"}`,
 					`{"id":2,"foo":"fiz","bar":"buz"}`,
-					`{"id":99,"type":"","foo":"foo","bar":"bar","updatedAt":"2022-07-06T16:18:00-04:00","createdAt":"2022-07-06T16:18:00-04:00"}`,
+					`{"id":100,"type":"","foo":"foo","bar":"bar","updatedAt":"2022-07-06T16:18:00-04:00","createdAt":"2022-07-06T16:18:00-04:00"}`,
 				},
 			},
 		},

@@ -3,7 +3,6 @@ package obj
 import (
 	"reflect"
 	"testing"
-	"time"
 )
 
 func TestAnd(t *testing.T) {
@@ -144,37 +143,18 @@ func TestOrderBy(t *testing.T) {
 }
 
 func TestMutator(t *testing.T) {
-	mutation := &Mutation{
-		From: map[string]any{},
-		To:   map[string]any{},
-	}
-
 	mutator := MutateFoo("fiz")
 
 	spec := &TestSpec{
 		Foo: "foo",
 	}
 
-	mutator.Mutate(spec, mutation)
+	mutator.Mutate(spec)
 
 	if spec.Foo != "fiz" {
 		t.Errorf(
 			"expected the mutator to change Foo from foo to fiz but got %s",
 			spec.Foo,
-		)
-	}
-
-	if mutation.From["foo"] != "foo" {
-		t.Errorf(
-			"expected mutation from value for Foo to be foo but got %s",
-			mutation.From["foo"],
-		)
-	}
-
-	if mutation.To["foo"] != "fiz" {
-		t.Errorf(
-			"expected mutation to value for Foo to be fiz but got %s",
-			mutation.To["foo"],
 		)
 	}
 }
@@ -247,64 +227,5 @@ func TestSort(t *testing.T) {
 				)
 			}
 		})
-	}
-}
-
-func TestMutatorAdd(t *testing.T) {
-	mutator := &Mutation{
-		From: map[string]any{},
-		To:   map[string]any{},
-	}
-
-	mutator.Add("foo", "bar", "baz")
-
-	var (
-		exists bool
-		got    any
-	)
-
-	got, exists = mutator.From["foo"]
-	if !exists {
-		t.Errorf("expected from to contain foo but it did not")
-	}
-	if got != "bar" {
-		t.Errorf("expected from to contain value bar but did not")
-	}
-
-	got, exists = mutator.To["foo"]
-	if !exists {
-		t.Errorf("expected to to contain foo but it did not")
-	}
-	if got != "baz" {
-		t.Errorf("expected to to contain value baz but did not")
-	}
-
-	mutator.Add("foo", "baz", "fuz")
-
-	got, exists = mutator.From["foo"]
-	if !exists {
-		t.Errorf("expected from to contain foo but it did not")
-	}
-	if got != "bar" {
-		t.Errorf("expected from to contain value bar but did not")
-	}
-
-	got, exists = mutator.To["foo"]
-	if !exists {
-		t.Errorf("expected to to contain foo but it did not")
-	}
-	if got != "fuz" {
-		t.Errorf("expected to to contain value fuz but did not")
-	}
-}
-
-func TestNow(t *testing.T) {
-	nower := &nower{}
-
-	var notExpect time.Time
-	got := nower.Now()
-
-	if got.Equal(notExpect) {
-		t.Errorf("expected now to return a time value but got a zero value")
 	}
 }

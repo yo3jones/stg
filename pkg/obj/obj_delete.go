@@ -1,12 +1,12 @@
 package obj
 
-func (stg *storage[I, T, S]) Delete(
+func (stg *storage[I, S]) Delete(
 	filters Matcher[S],
 ) (deleted []S, err error) {
 	return stg.runReadWrite(opDelete, filters, []Mutator[S]{})
 }
 
-func (stg *storage[I, T, S]) NewDeleteBuilder() DeleteBuilder[S] {
+func (stg *storage[I, S]) NewDeleteBuilder() DeleteBuilder[S] {
 	return &deleteBuilder[S]{
 		stg: stg,
 	}

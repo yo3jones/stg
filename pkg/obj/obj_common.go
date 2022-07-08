@@ -1,8 +1,12 @@
 package obj
 
-import "time"
+import (
+	"time"
 
-func (stg *storage[I, T, S]) newReadController(
+	"github.com/yo3jones/stg/pkg/objbinlog"
+)
+
+func (stg *storage[I, S]) newReadController(
 	ch chan specMsg[S],
 	errCh chan error,
 	filters Matcher[S],
@@ -21,41 +25,55 @@ func (stg *storage[I, T, S]) newReadController(
 	)
 }
 
-func (stg *storage[I, T, S]) newWriteController(
+func (stg *storage[I, S]) newWriteController(
 	inCh chan specMsg[S],
 	outCh chan specMsg[S],
 	errCh chan error,
+	binLogTrans objbinlog.Transaction,
 	mutators []Mutator[S],
 	now time.Time,
-) *writeController[S] {
+) *writeController[I, S] {
 	return newWriteController(
 		inCh,
 		outCh,
 		errCh,
 		mutators,
 		stg.stg,
+		binLogTrans,
 		stg.marshalUnmarshaller,
+		stg.idAccessor,
 		stg.updatedAtAccessor,
 		now,
 		optConcurrency{stg.concurrency},
 	)
 }
 
-func (stg *storage[I, T, S]) runReadWrite(
+func (stg *storage[I, S]) runReadWrite(
 	op op,
 	filters Matcher[S],
 	mutators []Mutator[S],
 	orderBys ...Lesser[S],
 ) (result []S, err error) {
 	var (
-		inCh  = make(chan specMsg[S], stg.concurrency)
-		outCh = make(chan specMsg[S], stg.concurrency)
-		errCh = make(chan error, stg.concurrency)
-		now   = stg.nower.Now()
+		binLogTrans objbinlog.Transaction
+		inCh        = make(chan specMsg[S], stg.concurrency)
+		outCh       = make(chan specMsg[S], stg.concurrency)
+		errCh       = make(chan error, stg.concurrency)
+		now         = stg.nower.Now()
 	)
 
+	binLogTrans = stg.binLogStg.StartTransaction(stg.objType)
+	defer binLogTrans.End()
+
 	readController := stg.newReadController(inCh, errCh, filters, op)
-	writeController := stg.newWriteController(inCh, outCh, errCh, mutators, now)
+	writeController := stg.newWriteController(
+		inCh,
+		outCh,
+		errCh,
+		binLogTrans,
+		mutators,
+		now,
+	)
 
 	go readController.Start()
 	go writeController.Start()
@@ -67,7 +85,7 @@ func (stg *storage[I, T, S]) runReadWrite(
 	return result, nil
 }
 
-func (stg *storage[I, T, S]) gatherResults(
+func (stg *storage[I, S]) gatherResults(
 	ch chan specMsg[S],
 	errCh chan error,
 	orderBys ...Lesser[S],
@@ -95,7 +113,7 @@ func (stg *storage[I, T, S]) gatherResults(
 	return results, nil
 }
 
-func (*storage[I, T, S]) gatherResult(
+func (*storage[I, S]) gatherResult(
 	ch chan specMsg[S],
 	errCh chan error,
 ) (s S, done bool, err error) {

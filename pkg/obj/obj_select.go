@@ -1,6 +1,6 @@
 package obj
 
-func (stg *storage[I, T, S]) Select(
+func (stg *storage[I, S]) Select(
 	filters Matcher[S],
 	orderBys []Lesser[S],
 ) (results []S, err error) {
@@ -20,8 +20,8 @@ func (stg *storage[I, T, S]) Select(
 	return results, nil
 }
 
-func (stg *storage[I, T, S]) NewSelectBuilder() SelectBuilder[S] {
-	return &selectBuilder[T, S]{stg: stg}
+func (stg *storage[I, S]) NewSelectBuilder() SelectBuilder[S] {
+	return &selectBuilder[S]{stg: stg}
 }
 
 type SelectBuilder[S any] interface {
@@ -30,26 +30,26 @@ type SelectBuilder[S any] interface {
 	Run() (results []S, err error)
 }
 
-type selectBuilder[T comparable, S any] struct {
+type selectBuilder[S any] struct {
 	where    Matcher[S]
 	orderBys []Lesser[S]
 	stg      Storage[S]
 }
 
-func (builder *selectBuilder[T, S]) Where(
+func (builder *selectBuilder[S]) Where(
 	filters ...Matcher[S],
 ) SelectBuilder[S] {
 	builder.where = And(filters...)
 	return builder
 }
 
-func (builder *selectBuilder[T, S]) OrderBy(
+func (builder *selectBuilder[S]) OrderBy(
 	orderBys ...Lesser[S],
 ) SelectBuilder[S] {
 	builder.orderBys = orderBys
 	return builder
 }
 
-func (builder *selectBuilder[T, S]) Run() (results []S, err error) {
+func (builder *selectBuilder[S]) Run() (results []S, err error) {
 	return builder.stg.Select(builder.where, builder.orderBys)
 }

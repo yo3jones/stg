@@ -1,6 +1,6 @@
 package obj
 
-func (stg *storage[I, T, S]) Update(
+func (stg *storage[I, S]) Update(
 	filters Matcher[S],
 	mutators []Mutator[S],
 	orderBys []Lesser[S],
@@ -8,7 +8,7 @@ func (stg *storage[I, T, S]) Update(
 	return stg.runReadWrite(opUpdate, filters, mutators, orderBys...)
 }
 
-func (stg *storage[I, T, S]) NewUpdateBuilder() UpdateBuilder[S] {
+func (stg *storage[I, S]) NewUpdateBuilder() UpdateBuilder[S] {
 	return &updateBuilder[S]{
 		stg: stg,
 	}

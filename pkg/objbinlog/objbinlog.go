@@ -4,12 +4,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yo3jones/stg/pkg/obj"
 	"github.com/yo3jones/stg/pkg/stg"
 )
 
 type BinLogStorage interface {
-	StartTranaction(objType string) Transaction
+	StartTransaction(objType string) Transaction
 }
 
 type Transaction interface {
@@ -21,10 +20,10 @@ type Transaction interface {
 
 type binLogStorage[T comparable] struct {
 	handle              stg.Handle
-	idFactory           obj.IdFactory[T]
+	idFactory           stg.IdFactory[T]
 	lock                sync.Mutex
-	marshalUnmarshaller obj.MarshalUnmarshaller[any]
-	nower               obj.Nower
+	marshalUnmarshaller stg.MarshalUnmarshaller[any]
+	nower               stg.Nower
 	writeLock           sync.Mutex
 }
 
@@ -38,18 +37,29 @@ type transaction[T comparable] struct {
 
 func New[T comparable](
 	handle stg.Handle,
-	idFactory obj.IdFactory[T],
-	marshalUnmarshaller obj.MarshalUnmarshaller[any],
+	idFactory stg.IdFactory[T],
+	marshalUnmarshaller stg.MarshalUnmarshaller[any],
+	opts ...OptBinLogStorage,
 ) BinLogStorage {
-	return &binLogStorage[T]{
+	stg := &binLogStorage[T]{
 		handle:              handle,
 		idFactory:           idFactory,
 		marshalUnmarshaller: marshalUnmarshaller,
-		nower:               obj.NewNower(),
+		nower:               stg.NewNower(),
 	}
+
+	for _, opt := range opts {
+		opt.isBinLogStorageOpt()
+		switch opt := opt.(type) {
+		case OptNower:
+			stg.nower = opt.Value
+		}
+	}
+
+	return stg
 }
 
-func (stg *binLogStorage[T]) StartTranaction(objType string) Transaction {
+func (stg *binLogStorage[T]) StartTransaction(objType string) Transaction {
 	stg.lock.Lock()
 	return &transaction[T]{
 		objType:       objType,
@@ -57,4 +67,16 @@ func (stg *binLogStorage[T]) StartTranaction(objType string) Transaction {
 		timestamp:     stg.nower.Now(),
 		transactionId: stg.idFactory.New(),
 	}
+}
+
+type OptBinLogStorage interface {
+	isBinLogStorageOpt() bool
+}
+
+type OptNower struct {
+	Value stg.Nower
+}
+
+func (opt OptNower) isBinLogStorageOpt() bool {
+	return true
 }

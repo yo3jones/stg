@@ -8,207 +8,39 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/yo3jones/stg/pkg/fstln"
+	"github.com/yo3jones/stg/pkg/objbinlog"
 )
-
-type TestSpec struct {
-	Id        int       `json:"id"`
-	Type      string    `json:"type"`
-	Foo       string    `json:"foo"`
-	Bar       string    `json:"bar"`
-	UpdatedAt time.Time `json:"updatedAt"`
-	CreatedAt time.Time `json:"createdAt"`
-}
-
-func (spec *TestSpec) GetId() int {
-	return spec.Id
-}
-
-func (spec *TestSpec) String() string {
-	var (
-		b   []byte
-		err error
-	)
-
-	if b, err = json.MarshalIndent(spec, "", "  "); err != nil {
-		return "woops"
-	}
-
-	return string(b)
-}
-
-type TestSpecFactory struct{}
-
-func (factory *TestSpecFactory) New() *TestSpec {
-	return &TestSpec{}
-}
-
-type TestNower struct{}
-
-func (*TestNower) Now() time.Time {
-	return GetTestNow()
-}
-
-func GetTestNow() time.Time {
-	now, err := time.Parse(time.RFC3339, "2022-07-06T16:18:00-04:00")
-	if err != nil {
-		fmt.Println(err)
-	}
-	return now
-}
-
-var (
-	IdAccessor        = &idAccessor{}
-	FooAccessor       = &fooAccessor{}
-	BarAccessor       = &barAccessor{}
-	UpdatedAtAccessor = &updatedAtAccessor{}
-	CreatedAtAccessor = &createdAtAccessor{}
-)
-
-var (
-	OrderById      = OrderBy[*TestSpec, int](IdAccessor)
-	OrderByFoo     = OrderBy[*TestSpec, string](FooAccessor)
-	OrderByFooDesc = OrderByDesc[*TestSpec, string](FooAccessor)
-	OrderByBar     = OrderBy[*TestSpec, string](BarAccessor)
-	OrderByBarDesc = OrderByDesc[*TestSpec, string](BarAccessor)
-)
-
-type idAccessor struct{}
-
-func (*idAccessor) Get(s *TestSpec) int {
-	return s.Id
-}
-
-func (*idAccessor) Name() string {
-	return "id"
-}
-
-func (*idAccessor) Set(s *TestSpec, v int) {
-	s.Id = v
-}
-
-type updatedAtAccessor struct{}
-
-func (*updatedAtAccessor) Get(s *TestSpec) time.Time {
-	return s.UpdatedAt
-}
-
-func (*updatedAtAccessor) Name() string {
-	return "updatedAt"
-}
-
-func (*updatedAtAccessor) Set(s *TestSpec, v time.Time) {
-	s.UpdatedAt = v
-}
-
-type createdAtAccessor struct{}
-
-func (*createdAtAccessor) Get(s *TestSpec) time.Time {
-	return s.CreatedAt
-}
-
-func (*createdAtAccessor) Name() string {
-	return "createdAt"
-}
-
-func (*createdAtAccessor) Set(s *TestSpec, v time.Time) {
-	s.CreatedAt = v
-}
-
-type fooAccessor struct{}
-
-func (*fooAccessor) Get(s *TestSpec) string {
-	return s.Foo
-}
-
-func (*fooAccessor) Name() string {
-	return "foo"
-}
-
-func (*fooAccessor) Set(s *TestSpec, v string) {
-	s.Foo = v
-}
-
-func FooEquals(v string) Matcher[*TestSpec] {
-	return Equals[*TestSpec, string](FooAccessor, v)
-}
-
-func MutateFoo(v string) Mutator[*TestSpec] {
-	return NewMutator[*TestSpec, string](FooAccessor, v)
-}
-
-type barAccessor struct{}
-
-func (*barAccessor) Get(s *TestSpec) string {
-	return s.Bar
-}
-
-func (*barAccessor) Name() string {
-	return "bar"
-}
-
-func (*barAccessor) Set(s *TestSpec, v string) {
-	s.Bar = v
-}
-
-func BarEquals(v string) Matcher[*TestSpec] {
-	return Equals[*TestSpec, string](BarAccessor, v)
-}
-
-func MutateBar(v string) Mutator[*TestSpec] {
-	return NewMutator[*TestSpec, string](BarAccessor, v)
-}
-
-type idFactory struct{}
-
-func (*idFactory) New() int {
-	return 99
-}
-
-type testMarshalUnmarshaller[S any] struct {
-	mockErr          *mockErr
-	marshalCallCount int
-}
-
-func (marshalUnmarshaller *testMarshalUnmarshaller[S]) Marshal(
-	v S,
-) ([]byte, error) {
-	defer func() { marshalUnmarshaller.marshalCallCount++ }()
-	mockErr := marshalUnmarshaller.mockErr
-	if mockErr != nil &&
-		mockErr.mockErrType == mockErrTypeMarshal &&
-		marshalUnmarshaller.marshalCallCount == mockErr.errorOn {
-		return nil, fmt.Errorf("%s", mockErr.msg)
-	}
-	return json.Marshal(v)
-}
-
-func (*testMarshalUnmarshaller[S]) Unmarshal(data []byte, v S) error {
-	return json.Unmarshal(data, v)
-}
 
 type testUtil struct {
-	file        *os.File
-	fstlnstg    fstln.Storage
-	stg         *storage[int, string, *TestSpec]
-	test        *testing.T
-	lines       []string
-	filters     Matcher[*TestSpec]
-	orderBys    []Lesser[*TestSpec]
-	mutators    []Mutator[*TestSpec]
-	bufferLen   int
-	mockError   *mockErr
-	expectError string
-	expect      []*TestSpec
-	expectLines [][]string
+	file         *os.File
+	logFile      *os.File
+	fstlnstg     fstln.Storage
+	binLogStg    objbinlog.BinLogStorage
+	stg          *storage[int, *TestSpec]
+	test         *testing.T
+	lines        []string
+	filters      Matcher[*TestSpec]
+	orderBys     []Lesser[*TestSpec]
+	mutators     []Mutator[*TestSpec]
+	bufferLen    int
+	mockError    *mockErr
+	expectError  string
+	expect       []*TestSpec
+	expectLines  [][]string
+	expectBinLog [][]string
 }
 
 func (util *testUtil) setup() (err error) {
 	os.Remove("test.jsonl")
+	os.Remove("test_log.jsonl")
 
 	if util.file, err = os.Create("test.jsonl"); err != nil {
+		return err
+	}
+
+	if util.logFile, err = os.Create("test_log.jsonl"); err != nil {
 		return err
 	}
 
@@ -226,14 +58,23 @@ func (util *testUtil) setup() (err error) {
 		bufferLen = util.bufferLen
 	}
 
-	util.stg = &storage[int, string, *TestSpec]{
+	util.binLogStg = objbinlog.New[int](
+		util.logFile,
+		&testIdFactory{200},
+		&testMarshalUnmarshaller[any]{},
+		objbinlog.OptNower{Value: &TestNower{}},
+	)
+
+	util.stg = &storage[int, *TestSpec]{
+		binLogStg:         &mockBinLogStroage{util.binLogStg, util.mockError},
 		bufferLen:         bufferLen,
 		concurrency:       2,
 		createdAtAccessor: CreatedAtAccessor,
 		factory:           &TestSpecFactory{},
 		idAccessor:        IdAccessor,
-		idFactory:         &idFactory{},
+		idFactory:         &testIdFactory{100},
 		nower:             &TestNower{},
+		objType:           "test",
 		stg:               util.fstlnstg,
 		marshalUnmarshaller: &testMarshalUnmarshaller[*TestSpec]{
 			mockErr: util.mockError,
@@ -256,7 +97,11 @@ func (util *testUtil) teardown() {
 	if util.file != nil {
 		util.file.Close()
 	}
+	if util.logFile != nil {
+		util.logFile.Close()
+	}
 	os.Remove("test.jsonl")
+	os.Remove("test_log.jsonl")
 }
 
 func (util *testUtil) writeLines(lines []string) (err error) {
@@ -351,6 +196,8 @@ func (util *testUtil) expectDelete() {
 	util.expectSpecs(result...)
 
 	util.handleExpectLines()
+
+	util.handleExpectBinLog()
 }
 
 func (util *testUtil) expectUpdate() {
@@ -415,6 +262,38 @@ func (util *testUtil) handleExpectLines() {
 			"expected file contents to be \n%s\n but got \n%s\n",
 			expectString,
 			gotString,
+		)
+	}
+}
+
+func (util *testUtil) handleExpectBinLog() {
+	var (
+		err      error
+		expect   string
+		found    bool
+		got      string
+		gotBytes []byte
+	)
+
+	if gotBytes, err = ioutil.ReadFile("test_log.jsonl"); err != nil {
+		util.test.Fatal(err)
+	}
+
+	got = string(gotBytes)
+	for _, expectLines := range util.expectBinLog {
+		expect = fmt.Sprintf("%s\n", strings.Join(expectLines, "\n"))
+		if got == expect {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		expect = fmt.Sprintf("%s\n", strings.Join(util.expectBinLog[0], "\n"))
+		util.test.Errorf(
+			"expected log file to contain \n%s\n but got \n%s\n",
+			expect,
+			got,
 		)
 	}
 }
@@ -528,6 +407,60 @@ func (mock *mockStg) handleMockError(t mockErrType) error {
 	return nil
 }
 
+type mockBinLogStroage struct {
+	stg     objbinlog.BinLogStorage
+	mockErr *mockErr
+}
+
+func (mock *mockBinLogStroage) StartTransaction(
+	objType string,
+) objbinlog.Transaction {
+	return &mockTransaction{
+		transaction: mock.stg.StartTransaction(objType),
+		mockErr:     mock.mockErr,
+	}
+}
+
+type mockTransaction struct {
+	transaction objbinlog.Transaction
+	mockErr     *mockErr
+	callCount   int
+}
+
+func (mock *mockTransaction) End() {
+	mock.transaction.End()
+}
+
+func (mock *mockTransaction) LogDelete(id any, from []byte) (err error) {
+	defer func() { mock.callCount++ }()
+	if mock.mockErr != nil &&
+		mock.mockErr.mockErrType == mockErrTypeBinLog &&
+		mock.mockErr.errorOn == mock.callCount {
+		return fmt.Errorf("%s", mock.mockErr.msg)
+	}
+	return mock.transaction.LogDelete(id, from)
+}
+
+func (mock *mockTransaction) LogInsert(id any, to []byte) (err error) {
+	defer func() { mock.callCount++ }()
+	if mock.mockErr != nil &&
+		mock.mockErr.mockErrType == mockErrTypeBinLog &&
+		mock.mockErr.errorOn == mock.callCount {
+		return fmt.Errorf("%s", mock.mockErr.msg)
+	}
+	return mock.transaction.LogInsert(id, to)
+}
+
+func (mock *mockTransaction) LogUpdate(id any, from, to []byte) (err error) {
+	defer func() { mock.callCount++ }()
+	if mock.mockErr != nil &&
+		mock.mockErr.mockErrType == mockErrTypeBinLog &&
+		mock.mockErr.errorOn == mock.callCount {
+		return fmt.Errorf("%s", mock.mockErr.msg)
+	}
+	return mock.transaction.LogUpdate(id, from, to)
+}
+
 type mockErr struct {
 	mockErrType mockErrType
 	errorOn     int
@@ -543,4 +476,5 @@ const (
 	mockErrTypeInsert
 	mockErrTypeDelete
 	mockErrTypeUpdate
+	mockErrTypeBinLog
 )

@@ -15,12 +15,12 @@ import (
 type testHelper struct {
 	t       *testing.T
 	file    *os.File
-	stg     *binLogStorage[int]
+	stg     BinLogStorage
 	mockErr *mockErr
 	expect  []string
 }
 
-func (helper *testHelper) setup() *binLogStorage[int] {
+func (helper *testHelper) setup() BinLogStorage {
 	var err error
 
 	os.Remove("test.jsonl")
@@ -29,15 +29,22 @@ func (helper *testHelper) setup() *binLogStorage[int] {
 		helper.t.Fatal(err)
 	}
 
-	helper.stg = &binLogStorage[int]{
-		handle: &mockHandle{
-			handle:  helper.file,
-			mockErr: helper.mockErr,
-		},
-		idFactory:           &testIdFactory{},
-		marshalUnmarshaller: &testMarshalUnmarshaller{mockErr: helper.mockErr},
-		nower:               &testNower{},
-	}
+	// helper.stg = &binLogStorage[int]{
+	// 	handle: &mockHandle{
+	// 		handle:  helper.file,
+	// 		mockErr: helper.mockErr,
+	// 	},
+	// 	idFactory:           &testIdFactory{},
+	// 	marshalUnmarshaller: &testMarshalUnmarshaller{mockErr: helper.mockErr},
+	// 	nower:               &testNower{},
+	// }
+
+	helper.stg = New[int](
+		&mockHandle{handle: helper.file, mockErr: helper.mockErr},
+		&testIdFactory{},
+		&testMarshalUnmarshaller{mockErr: helper.mockErr},
+		OptNower{&testNower{}},
+	)
 
 	return helper.stg
 }
@@ -225,7 +232,7 @@ func TestLogDelete(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var (
 				err         error
-				stg         *binLogStorage[int]
+				stg         BinLogStorage
 				transaction Transaction
 			)
 
@@ -240,7 +247,7 @@ func TestLogDelete(t *testing.T) {
 
 			id := 0
 			for _, froms := range tc.froms {
-				transaction = stg.StartTranaction("test")
+				transaction = stg.StartTransaction("test")
 				for _, from := range froms {
 					if err != nil {
 						continue
@@ -361,7 +368,7 @@ func TestLogInsert(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var (
 				err         error
-				stg         *binLogStorage[int]
+				stg         BinLogStorage
 				transaction Transaction
 			)
 
@@ -375,7 +382,7 @@ func TestLogInsert(t *testing.T) {
 
 			id := 0
 			for _, tos := range tc.tos {
-				transaction = stg.StartTranaction("test")
+				transaction = stg.StartTransaction("test")
 				for _, to := range tos {
 					if err != nil {
 						continue
@@ -464,7 +471,7 @@ func TestLogUpdate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var (
 				err         error
-				stg         *binLogStorage[int]
+				stg         BinLogStorage
 				transaction Transaction
 			)
 
@@ -478,7 +485,7 @@ func TestLogUpdate(t *testing.T) {
 
 			id := 0
 			for _, updates := range tc.updates {
-				transaction = stg.StartTranaction("test")
+				transaction = stg.StartTransaction("test")
 				for _, update := range updates {
 					if err != nil {
 						continue

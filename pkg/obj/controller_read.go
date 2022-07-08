@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/yo3jones/stg/pkg/fstln"
+	"github.com/yo3jones/stg/pkg/stg"
 )
 
 type readController[S any] struct {
@@ -18,7 +19,7 @@ type readController[S any] struct {
 	op                  op
 	source              string
 	stg                 fstln.Storage
-	marshalUnmarshaller MarshalUnmarshaller[S]
+	marshalUnmarshaller stg.MarshalUnmarshaller[S]
 }
 
 type readControllerOpt interface {
@@ -37,9 +38,9 @@ func (opt optOp) isReadControllerOpt() bool {
 	return true
 }
 
-func (opt optSource) isReadControllerOpt() bool {
-	return true
-}
+// func (opt optSource) isReadControllerOpt() bool {
+// 	return true
+// }
 
 func newReadController[S any](
 	ch chan specMsg[S],
@@ -47,7 +48,7 @@ func newReadController[S any](
 	factory SpecFactory[S],
 	filters Matcher[S],
 	stg fstln.Storage,
-	marshalUnmarshaller MarshalUnmarshaller[S],
+	marshalUnmarshaller stg.MarshalUnmarshaller[S],
 	opts ...readControllerOpt,
 ) *readController[S] {
 	controller := &readController[S]{
@@ -72,8 +73,8 @@ func newReadController[S any](
 			controller.concurrency = opt.value
 		case optOp:
 			controller.op = opt.value
-		case optSource:
-			controller.source = opt.value
+			// case optSource:
+			// 	controller.source = opt.value
 		}
 	}
 
@@ -92,15 +93,10 @@ func (controller *readController[S]) Start() {
 	}
 
 	for i := 0; i < controller.concurrency; i++ {
-		proc := &readProcess[S]{
-			buffer:     make([]byte, controller.bufferLen),
-			controller: controller,
-		}
-
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			proc.Start()
+			controller.startProc()
 		}()
 	}
 
@@ -112,84 +108,83 @@ func (controller *readController[S]) Start() {
 	}
 }
 
-type readProcess[S any] struct {
-	buffer     []byte
-	controller *readController[S]
-}
-
-func (proc *readProcess[S]) Start() {
+func (controller *readController[S]) startProc() {
 	var (
-		err error
-		pos fstln.Position
-		msg specMsg[S]
+		data []byte
+		err  error
+		pos  fstln.Position
+		msg  specMsg[S]
 	)
 
 	for {
-		if pos, err = proc.read(); err != nil && err != io.EOF {
-			proc.controller.errCh <- err
+		if pos, data, err = controller.read(); err != nil && err != io.EOF {
+			controller.errCh <- err
 			break
 		} else if pos == fstln.EOF {
 			break
 		}
 
-		if msg, err = proc.unmarshal(pos); err != nil {
-			proc.controller.errCh <- err
+		if msg, err = controller.unmarshal(pos, data); err != nil {
+			controller.errCh <- err
 			break
 		}
 
-		if !proc.controller.filters.Match(msg.spec) {
+		if !controller.filters.Match(msg.spec) {
 			continue
 		}
 
-		proc.controller.ch <- msg
+		controller.ch <- msg
 	}
 }
 
-func (proc *readProcess[S]) unmarshal(
+func (controller *readController[S]) unmarshal(
 	pos fstln.Position,
+	data []byte,
 ) (msg specMsg[S], err error) {
-	data := proc.buffer[:pos.Len]
-	s := proc.controller.factory.New()
+	s := controller.factory.New()
 
-	err = proc.controller.marshalUnmarshaller.Unmarshal(data, s)
+	err = controller.marshalUnmarshaller.Unmarshal(data, s)
 	if err != nil {
 		return msg, err
 	}
 
 	return specMsg[S]{
-		op:     proc.controller.op,
+		op:     controller.op,
 		pos:    pos,
-		source: proc.controller.source,
+		raw:    data,
+		source: controller.source,
 		spec:   s,
 	}, nil
 }
 
-func (proc *readProcess[S]) read() (pos fstln.Position, err error) {
-	proc.controller.lock.Lock()
-	defer proc.controller.lock.Unlock()
+func (controller *readController[S]) read() (pos fstln.Position, data []byte, err error) {
+	controller.lock.Lock()
+	defer controller.lock.Unlock()
+
+	data = make([]byte, controller.bufferLen)
 
 	var (
-		buffer    = proc.buffer
-		bufferLen int
-		isPrefix  bool
+		buffer   = data
+		dataLen  int
+		isPrefix bool
 	)
 
 	for {
-		pos, _, isPrefix, err = proc.controller.stg.Read(buffer)
+		pos, _, isPrefix, err = controller.stg.Read(buffer)
 		if err != nil && err != io.EOF {
-			return pos, err
+			return pos, nil, err
 		} else if pos == fstln.EOF {
-			return pos, io.EOF
+			return pos, nil, io.EOF
 		}
 
 		if !isPrefix {
-			return pos, err
+			return pos, data[:pos.Len-1], err
 		}
 
-		bufferLen = len(proc.buffer)
-		proc.buffer = append(
-			proc.buffer,
-			make([]byte, proc.controller.bufferLen)...)
-		buffer = proc.buffer[bufferLen:]
+		dataLen = len(data)
+		data = append(
+			data,
+			make([]byte, controller.bufferLen)...)
+		buffer = data[dataLen:]
 	}
 }

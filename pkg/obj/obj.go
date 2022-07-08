@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"github.com/yo3jones/stg/pkg/fstln"
+	"github.com/yo3jones/stg/pkg/objbinlog"
+	"github.com/yo3jones/stg/pkg/stg"
 	"golang.org/x/exp/constraints"
 	"golang.org/x/exp/slices"
 )
@@ -25,87 +27,23 @@ type Storage[S any] interface {
 	) (updated []S, err error)
 }
 
-type storage[I comparable, T comparable, S any] struct {
+type storage[I comparable, S any] struct {
+	binLogStg           objbinlog.BinLogStorage
 	bufferLen           int
 	concurrency         int
 	createdAtAccessor   Accessor[S, time.Time]
 	factory             SpecFactory[S]
 	idAccessor          Accessor[S, I]
-	idFactory           IdFactory[I]
-	nower               Nower
+	idFactory           stg.IdFactory[I]
+	nower               stg.Nower
+	objType             string
 	stg                 fstln.Storage
-	marshalUnmarshaller MarshalUnmarshaller[S]
+	marshalUnmarshaller stg.MarshalUnmarshaller[S]
 	updatedAtAccessor   Accessor[S, time.Time]
-}
-
-type MarshalUnmarshaller[S any] interface {
-	Marshaller[S]
-	Unmarshaller[S]
-}
-
-type Marshaller[S any] interface {
-	Marshal(v S) ([]byte, error)
-}
-
-type Unmarshaller[S any] interface {
-	Unmarshal(data []byte, v S) error
-}
-
-type MutationAdder interface {
-	Add(field string, from, to any)
-}
-
-type Mutation struct {
-	TransactionId string         `json:"transactionId"`
-	Timestamp     time.Time      `json:"timestamp"`
-	Type          string         `json:"type"`
-	Id            any            `json:"id"`
-	Partition     string         `json:"partition"`
-	From          map[string]any `json:"from"`
-	To            map[string]any `json:"to"`
-}
-
-func newMutation() *Mutation {
-	return &Mutation{
-		From: map[string]any{},
-		To:   map[string]any{},
-	}
-}
-
-func (mutation *Mutation) Add(field string, from, to any) {
-	if _, exists := mutation.From[field]; !exists {
-		mutation.From[field] = from
-	}
-	mutation.To[field] = to
-
-	// TODO check if the from and to values are equal, if so then remove
-	// this may be tough for non comparable types, might be able to do specific
-	// logic for set, slice and map?
-	//
-	// also need to worry about type safety as we don't have compile time
-	// checking that the from and to types match
-}
-
-type Nower interface {
-	Now() time.Time
-}
-
-type nower struct{}
-
-func NewNower() Nower {
-	return &nower{}
-}
-
-func (*nower) Now() time.Time {
-	return time.Now()
 }
 
 type SpecFactory[S any] interface {
 	New() S
-}
-
-type IdFactory[I comparable] interface {
-	New() I
 }
 
 type Accessor[S any, T any] interface {
@@ -115,7 +53,7 @@ type Accessor[S any, T any] interface {
 }
 
 type Mutator[S any] interface {
-	Mutate(s S, mutation MutationAdder)
+	Mutate(s S)
 }
 
 type mutator[S any, V comparable] struct {
@@ -123,10 +61,8 @@ type mutator[S any, V comparable] struct {
 	value    V
 }
 
-func (mutator *mutator[S, V]) Mutate(s S, mutation MutationAdder) {
-	from := mutator.accessor.Get(s)
+func (mutator *mutator[S, V]) Mutate(s S) {
 	mutator.accessor.Set(s, mutator.value)
-	mutation.Add(mutator.accessor.Name(), from, mutator.value)
 }
 
 func NewMutator[S any, V comparable](
